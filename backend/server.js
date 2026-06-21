@@ -1,9 +1,10 @@
 require('dotenv').config();
+require('express-async-errors'); // Catch all unhandled promise rejections
 const express = require('express');
 const cors = require('cors');
 
-// ─── Import database (runs createTables + seedAdmin on startup) ───────────────
-require('./db/database');
+// ─── Import database pool ─────────────────────────────────────────────────────
+const db = require('./db/database');
 
 // ─── Import all route handlers ────────────────────────────────────────────────
 const authRoutes          = require('./routes/auth');
@@ -26,6 +27,21 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// ─── DB Initialization Middleware ─────────────────────────────────────────────
+let dbInitialized = false;
+app.use('/api', async (req, res, next) => {
+  if (!dbInitialized) {
+    try {
+      await db.initDB();
+      dbInitialized = true;
+    } catch (err) {
+      console.error('DB Init Error Middleware:', err);
+      return next(err);
+    }
+  }
+  next();
+});
+
 // ─── Mount Routes ─────────────────────────────────────────────────────────────
 app.use('/api/auth',          authRoutes);
 app.use('/api/employees',     employeeRoutes);
@@ -37,8 +53,18 @@ app.use('/api/audit',         auditRoutes);
 app.use('/api/notifications', notificationRoutes);
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', server: 'Giantek API', timestamp: new Date().toISOString() });
+app.get('/api/health', async (req, res) => {
+  try {
+    const [result] = await db.query('SELECT NOW() as time');
+    res.json({ 
+      status: 'ok', 
+      server: 'Giantek API', 
+      timestamp: new Date().toISOString(),
+      db_time: result[0].time
+    });
+  } catch (err) {
+    res.status(500).json({ status: 'error', error: err.message, stack: err.stack });
+  }
 });
 
 // ─── Global Error Handler ─────────────────────────────────────────────────────
@@ -58,7 +84,7 @@ app.listen(PORT, () => {
   console.log('   ╚═════╝ ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝   ╚══════╝╚═╝  ╚═╝');
   console.log('');
   console.log(`  🚀 Server running at  http://localhost:${PORT}`);
-  console.log(`  📦 Database           SQLite (local) — giantek.db`);
+  console.log(`  📦 Database           MySQL — Render Ready`);
   console.log(`  🔗 Frontend origin    ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
   console.log(`  👤 Admin login        admin@giantek.com / Admin@123`);
   console.log('');

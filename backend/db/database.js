@@ -1,157 +1,158 @@
-// Node.js 24 has a built-in SQLite module — no native compilation required!
-// This replaces better-sqlite3 with the same synchronous API.
-const { DatabaseSync } = require('node:sqlite');
+const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
-const path = require('path');
 
-// Database file stored inside the backend folder
-const DB_PATH = path.join(__dirname, '..', 'giantek.db');
+const dbUri = process.env.MYSQL_URL || process.env.DATABASE_URL || 'mysql://root:password@localhost:3306/giantek';
 
-const db = new DatabaseSync(DB_PATH);
-
-// Enable WAL mode for better concurrency and performance
-db.exec('PRAGMA journal_mode = WAL');
-// Enforce foreign key constraints
-db.exec('PRAGMA foreign_keys = ON');
+const pool = mysql.createPool({
+  uri: dbUri,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+  multipleStatements: true
+});
 
 // ─── CREATE ALL TABLES ─────────────────────────────────────────────────────────
 
-const createTables = () => {
-  db.exec(`
-    -- ── Users: both admin and employees ──────────────────────────────────
+const createTables = async () => {
+  const schema = `
     CREATE TABLE IF NOT EXISTS users (
-      id                   INTEGER PRIMARY KEY AUTOINCREMENT,
-      name                 TEXT    NOT NULL,
-      email                TEXT    UNIQUE NOT NULL,
-      password_hash        TEXT    NOT NULL,
-      mobile               TEXT,
-      role                 TEXT    NOT NULL DEFAULT 'employee',
-      is_active            INTEGER NOT NULL DEFAULT 1,
-      must_change_password INTEGER NOT NULL DEFAULT 0,
+      id                   INT AUTO_INCREMENT PRIMARY KEY,
+      name                 VARCHAR(255) NOT NULL,
+      email                VARCHAR(255) UNIQUE NOT NULL,
+      password_hash        VARCHAR(255) NOT NULL,
+      mobile               VARCHAR(50),
+      role                 VARCHAR(50) NOT NULL DEFAULT 'employee',
+      is_active            TINYINT(1) NOT NULL DEFAULT 1,
+      must_change_password TINYINT(1) NOT NULL DEFAULT 0,
+      is_deleted           TINYINT(1) NOT NULL DEFAULT 0,
       created_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at           DATETIME DEFAULT CURRENT_TIMESTAMP
+      updated_at           DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     );
 
-    -- ── Clients ───────────────────────────────────────────────────────────
     CREATE TABLE IF NOT EXISTS clients (
-      id             INTEGER PRIMARY KEY AUTOINCREMENT,
-      name           TEXT    NOT NULL,
-      contact_number TEXT,
-      email          TEXT,
-      company_name   TEXT,
+      id             INT AUTO_INCREMENT PRIMARY KEY,
+      name           VARCHAR(255) NOT NULL,
+      contact_number VARCHAR(50),
+      email          VARCHAR(255),
+      company_name   VARCHAR(255),
       notes          TEXT,
-      created_by     INTEGER REFERENCES users(id),
+      created_by     INT,
       created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+      updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
     );
 
-    -- ── Work Entries ──────────────────────────────────────────────────────
     CREATE TABLE IF NOT EXISTS work_entries (
-      id               INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id        INTEGER NOT NULL REFERENCES clients(id),
-      status           TEXT    NOT NULL DEFAULT 'in_progress',
-      work_type        TEXT    NOT NULL,
+      id               INT AUTO_INCREMENT PRIMARY KEY,
+      client_id        INT NOT NULL,
+      status           VARCHAR(50) NOT NULL DEFAULT 'in_progress',
+      work_type        VARCHAR(255) NOT NULL,
       misc_description TEXT,
-      time_taken       REAL    NOT NULL,
-      priority         TEXT    NOT NULL DEFAULT 'Medium',
-      work_date        DATE    NOT NULL DEFAULT (date('now', 'localtime')),
-      created_by       INTEGER NOT NULL REFERENCES users(id),
-      completed_at     DATETIME,
-      is_locked        INTEGER NOT NULL DEFAULT 0,
+      time_taken       FLOAT NOT NULL,
+      priority         VARCHAR(50) NOT NULL DEFAULT 'Medium',
+      work_date        DATE NOT NULL DEFAULT (CURRENT_DATE),
+      created_by       INT NOT NULL,
+      completed_at     DATETIME NULL,
+      is_locked        TINYINT(1) NOT NULL DEFAULT 0,
       created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP
+      updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
     );
 
-    -- ── Work Entry Employees: many-to-many ────────────────────────────────
     CREATE TABLE IF NOT EXISTS work_entry_employees (
-      work_entry_id INTEGER NOT NULL REFERENCES work_entries(id) ON DELETE CASCADE,
-      employee_id   INTEGER NOT NULL REFERENCES users(id),
-      PRIMARY KEY (work_entry_id, employee_id)
+      work_entry_id INT NOT NULL,
+      employee_id   INT NOT NULL,
+      PRIMARY KEY (work_entry_id, employee_id),
+      FOREIGN KEY (work_entry_id) REFERENCES work_entries(id) ON DELETE CASCADE,
+      FOREIGN KEY (employee_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
-    -- ── Revenue ───────────────────────────────────────────────────────────
     CREATE TABLE IF NOT EXISTS revenue (
-      id            INTEGER PRIMARY KEY AUTOINCREMENT,
-      employee_id   INTEGER NOT NULL REFERENCES users(id),
-      client_id     INTEGER NOT NULL REFERENCES clients(id),
-      work_entry_id INTEGER REFERENCES work_entries(id),
-      work_type     TEXT    NOT NULL,
-      value         REAL    NOT NULL,
+      id            INT AUTO_INCREMENT PRIMARY KEY,
+      employee_id   INT NOT NULL,
+      client_id     INT NOT NULL,
+      work_entry_id INT NULL,
+      work_type     VARCHAR(255) NOT NULL,
+      value         FLOAT NOT NULL,
       notes         TEXT,
-      created_by    INTEGER NOT NULL REFERENCES users(id),
+      created_by    INT NOT NULL,
       created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+      updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (employee_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
+      FOREIGN KEY (work_entry_id) REFERENCES work_entries(id) ON DELETE SET NULL,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
     );
 
-    -- ── Password Reset Tokens ─────────────────────────────────────────────
     CREATE TABLE IF NOT EXISTS password_resets (
-      id         INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id    INTEGER NOT NULL REFERENCES users(id),
-      token      TEXT    NOT NULL UNIQUE,
+      id         INT AUTO_INCREMENT PRIMARY KEY,
+      user_id    INT NOT NULL,
+      token      VARCHAR(255) NOT NULL UNIQUE,
       expires_at DATETIME NOT NULL,
-      used       INTEGER  DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      used       TINYINT(1) DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
-    -- ── Audit Log ─────────────────────────────────────────────────────────
     CREATE TABLE IF NOT EXISTS audit_log (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id     INTEGER REFERENCES users(id),
-      user_name   TEXT,
-      user_email  TEXT,
-      action      TEXT    NOT NULL,
-      entity_type TEXT    NOT NULL,
-      entity_id   INTEGER,
+      id          INT AUTO_INCREMENT PRIMARY KEY,
+      user_id     INT NULL,
+      user_name   VARCHAR(255),
+      user_email  VARCHAR(255),
+      action      VARCHAR(255) NOT NULL,
+      entity_type VARCHAR(255) NOT NULL,
+      entity_id   INT,
       old_values  TEXT,
       new_values  TEXT,
       description TEXT,
-      ip_address  TEXT,
-      created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+      ip_address  VARCHAR(255),
+      created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
     );
 
-    -- ── Notifications ─────────────────────────────────────────────────────
     CREATE TABLE IF NOT EXISTS notifications (
-      id         INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id    INTEGER NOT NULL REFERENCES users(id),
-      title      TEXT    NOT NULL,
-      message    TEXT    NOT NULL,
-      type       TEXT    DEFAULT 'info',
+      id         INT AUTO_INCREMENT PRIMARY KEY,
+      user_id    INT NOT NULL,
+      title      VARCHAR(255) NOT NULL,
+      message    TEXT NOT NULL,
+      type       VARCHAR(50) DEFAULT 'info',
       link       TEXT,
-      is_read    INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      is_read    TINYINT(1) DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
-  `);
+  `;
+
+  await pool.query(schema);
 };
 
 // ─── SEED DEFAULT ADMIN ────────────────────────────────────────────────────────
 
-const seedAdmin = () => {
-  const admin = db.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").get();
-  if (!admin) {
+const seedAdmin = async () => {
+  const [rows] = await pool.query("SELECT id FROM users WHERE role = 'admin' LIMIT 1");
+  if (rows.length === 0) {
     const passwordHash = bcrypt.hashSync('Admin@123', 10);
-    db.prepare(`
+    await pool.execute(`
       INSERT INTO users (name, email, password_hash, mobile, role, is_active, must_change_password)
       VALUES (?, ?, ?, ?, 'admin', 1, 0)
-    `).run('Admin', 'admin@giantek.com', passwordHash, '');
+    `, ['Admin', 'admin@giantek.com', passwordHash, '']);
     console.log('✅ Admin seeded — Email: admin@giantek.com | Password: Admin@123');
   }
 };
 
-createTables();
-
-// ─── MIGRATIONS (idempotent — safe to run on every startup) ───────────────────
-
-const runMigrations = () => {
-  // v1: Add is_deleted flag to users so removed employees keep all their data
+const initDB = async () => {
   try {
-    db.exec('ALTER TABLE users ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0');
-    console.log('✅ Migration: added is_deleted column to users');
-  } catch {
-    // Column already exists — expected on subsequent runs, safe to ignore
+    await createTables();
+    await seedAdmin();
+    console.log('✅ Database initialized successfully');
+  } catch (error) {
+    console.error('❌ Database initialization failed:', error);
+    throw error;
   }
 };
 
-runMigrations();
-seedAdmin();
+// Attach initDB to the pool so it can be called explicitly
+pool.initDB = initDB;
 
-module.exports = db;
+module.exports = pool;

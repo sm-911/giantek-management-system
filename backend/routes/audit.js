@@ -9,7 +9,7 @@ router.use(authenticate, adminOnly);
 
 // ─── GET /api/audit ───────────────────────────────────────────────────────────
 // Returns paginated audit log with optional filters.
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const { user_id, action, entity_type, date_from, date_to, page = 1, limit = 50 } = req.query;
 
   let query = `
@@ -29,14 +29,15 @@ router.get('/', (req, res) => {
 
   // Total count for pagination
   const countQuery = query.replace('SELECT al.*, u.name as actor_name', 'SELECT COUNT(*) as cnt');
-  const total = db.prepare(countQuery).get(...params).cnt;
+  const [countRows] = await db.execute(countQuery, params);
+  const total = countRows[0].cnt;
 
   // Paginate
   const offset = (parseInt(page) - 1) * parseInt(limit);
   query += ` ORDER BY al.created_at DESC LIMIT ? OFFSET ?`;
   params.push(parseInt(limit), offset);
 
-  const logs = db.prepare(query).all(...params);
+  const [logs] = await db.execute(query, params);
 
   // Parse JSON strings back to objects
   const result = logs.map(log => ({

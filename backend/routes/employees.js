@@ -11,15 +11,15 @@ router.use(authenticate, adminOnly);
 // ─── GET /api/employees ───────────────────────────────────────────────────────
 // Default: only non-deleted employees.
 // Pass ?include_removed=true to also get removed employees.
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const includeRemoved = req.query.include_removed === 'true';
-    const employees = db.prepare(`
+    const [employees] = await db.execute(`
       SELECT id, name, email, mobile, role, is_active, is_deleted, created_at, updated_at
       FROM users
       WHERE role = 'employee' ${includeRemoved ? '' : 'AND is_deleted = 0'}
       ORDER BY is_deleted ASC, name ASC
-    `).all();
+    `);
     res.json(employees);
   } catch (err) {
     console.error('GET /employees error:', err);
@@ -28,12 +28,13 @@ router.get('/', (req, res) => {
 });
 
 // ─── GET /api/employees/:id ───────────────────────────────────────────────────
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const emp = db.prepare(`
+    const [rows] = await db.execute(`
       SELECT id, name, email, mobile, role, is_active, is_deleted, created_at, updated_at
       FROM users WHERE id = ? AND role = 'employee'
-    `).get(parseInt(req.params.id));
+    `, [parseInt(req.params.id)]);
+    const emp = rows[0];
 
     if (!emp) return res.status(404).json({ error: 'Employee not found.' });
     res.json(emp);
@@ -46,13 +47,14 @@ router.get('/:id', (req, res) => {
 // ─── GET /api/employees/:id/history ──────────────────────────────────────────
 // Full work + revenue history for a specific employee — useful for reviewing
 // a removed employee's contributions.
-router.get('/:id/history', (req, res) => {
+router.get('/:id/history', async (req, res) => {
   try {
     const empId = parseInt(req.params.id);
-    const emp = db.prepare('SELECT id, name, email, role, is_deleted FROM users WHERE id = ?').get(empId);
+    const [empRows] = await db.execute('SELECT id, name, email, role, is_deleted FROM users WHERE id = ?', [empId]);
+    const emp = empRows[0];
     if (!emp) return res.status(404).json({ error: 'Employee not found.' });
 
-    const workEntries = db.prepare(`
+    const [workEntries] = await db.execute(`
       SELECT we.id, c.name AS client_name, we.work_type, we.misc_description,
              we.status, we.time_taken, we.priority, we.work_date
       FROM work_entries we
@@ -60,17 +62,17 @@ router.get('/:id/history', (req, res) => {
       JOIN clients c ON c.id = we.client_id
       WHERE wee.employee_id = ?
       ORDER BY we.work_date DESC
-    `).all(empId);
+    `, [empId]);
 
-    const revenue = db.prepare(`
+    const [revenue] = await db.execute(`
       SELECT r.id, c.name AS client_name, r.work_type, r.value, r.notes, r.created_at
       FROM revenue r
       JOIN clients c ON c.id = r.client_id
       WHERE r.employee_id = ?
       ORDER BY r.created_at DESC
-    `).all(empId);
+    `, [empId]);
 
-    const stats = db.prepare(`
+    const [statsRows] = await db.execute(`
       SELECT
         COUNT(DISTINCT wee.work_entry_id) AS total_tasks,
         SUM(CASE WHEN we.status = 'completed' THEN 1 ELSE 0 END) AS completed_tasks,
@@ -78,11 +80,13 @@ router.get('/:id/history', (req, res) => {
       FROM work_entries we
       JOIN work_entry_employees wee ON wee.work_entry_id = we.id
       WHERE wee.employee_id = ?
-    `).get(empId);
+    `, [empId]);
+    const stats = statsRows[0];
 
-    const totalRevenue = db.prepare(
-      'SELECT COALESCE(SUM(value), 0) AS total FROM revenue WHERE employee_id = ?'
-    ).get(empId);
+    const [totalRevenueRows] = await db.execute(
+      'SELECT COALESCE(SUM(value), 0) AS total FROM revenue WHERE employee_id = ?', [empId]
+    );
+    const totalRevenue = totalRevenueRows[0];
 
     res.json({
       employee: emp,
@@ -97,7 +101,7 @@ router.get('/:id/history', (req, res) => {
 });
 
 // ─── POST /api/employees ──────────────────────────────────────────────────────
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { name, email, mobile, password } = req.body;
 
@@ -108,7 +112,8 @@ router.post('/', (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 6 characters.' });
     }
 
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase().trim());
+    const [existingRows] = await db.execute('SELECT id FROM users WHERE email = ?', [email.toLowerCase().trim()]);
+    const existing = existingRows[0];
     if (existing) {
       return res.status(409).json({ error: 'An account with this email already exists.' });
     }
@@ -116,14 +121,16 @@ router.post('/', (req, res) => {
     const passwordHash = bcrypt.hashSync(password, 10);
     const safeMobile = mobile ? String(mobile).trim() : '';
 
-    const result = db.prepare(`
+    const [result] = await db.execute(`
       INSERT INTO users (name, email, password_hash, mobile, role, is_active, is_deleted, must_change_password)
       VALUES (?, ?, ?, ?, 'employee', 1, 0, 1)
-    `).run(name.trim(), email.toLowerCase().trim(), passwordHash, safeMobile);
+    `, [name.trim(), email.toLowerCase().trim(), passwordHash, safeMobile]);
 
-    const newEmployee = db.prepare(
-      'SELECT id, name, email, mobile, role, is_active, is_deleted, created_at FROM users WHERE id = ?'
-    ).get(result.lastInsertRowid);
+    const [newEmployeeRows] = await db.execute(
+      'SELECT id, name, email, mobile, role, is_active, is_deleted, created_at FROM users WHERE id = ?',
+      [result.insertId]
+    );
+    const newEmployee = newEmployeeRows[0];
 
     logAudit(req.user.id, req.user.name, req.user.email, 'CREATE', 'user', newEmployee.id,
       `Created employee: ${name}`, null, { name, email }, req.ip);
@@ -139,12 +146,13 @@ router.post('/', (req, res) => {
 });
 
 // ─── PUT /api/employees/:id ───────────────────────────────────────────────────
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const empId = parseInt(req.params.id);
     const { name, mobile, is_active } = req.body;
 
-    const emp = db.prepare("SELECT * FROM users WHERE id = ? AND role = 'employee'").get(empId);
+    const [empRows] = await db.execute("SELECT * FROM users WHERE id = ? AND role = 'employee'", [empId]);
+    const emp = empRows[0];
     if (!emp) return res.status(404).json({ error: 'Employee not found.' });
 
     const oldValues = { name: emp.name, mobile: emp.mobile, is_active: emp.is_active };
@@ -155,15 +163,17 @@ router.put('/:id', (req, res) => {
                           ? (is_active ? 1 : 0)
                           : emp.is_active;
 
-    db.prepare(`
+    await db.execute(`
       UPDATE users
       SET name = ?, mobile = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(newName, newMobile, newIsActive, empId);
+    `, [newName, newMobile, newIsActive, empId]);
 
-    const updated = db.prepare(
-      'SELECT id, name, email, mobile, role, is_active, is_deleted FROM users WHERE id = ?'
-    ).get(empId);
+    const [updatedRows] = await db.execute(
+      'SELECT id, name, email, mobile, role, is_active, is_deleted FROM users WHERE id = ?',
+      [empId]
+    );
+    const updated = updatedRows[0];
 
     logAudit(req.user.id, req.user.name, req.user.email, 'UPDATE', 'user', empId,
       `Updated employee: ${emp.name}`, oldValues,
@@ -185,18 +195,19 @@ router.put('/:id', (req, res) => {
 // Marks the employee as REMOVED (is_deleted = 1) and deactivates their account.
 // All work entries, revenue, and audit history are fully preserved and reviewable.
 // This is NOT a hard delete — the user row is kept so all foreign keys remain intact.
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     const empId = parseInt(req.params.id);
 
-    const emp = db.prepare("SELECT id, name FROM users WHERE id = ? AND role = 'employee'").get(empId);
+    const [empRows] = await db.execute("SELECT id, name FROM users WHERE id = ? AND role = 'employee'", [empId]);
+    const emp = empRows[0];
     if (!emp) return res.status(404).json({ error: 'Employee not found.' });
 
-    db.prepare(`
+    await db.execute(`
       UPDATE users
       SET is_deleted = 1, is_active = 0, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(empId);
+    `, [empId]);
 
     logAudit(req.user.id, req.user.name, req.user.email, 'DELETE', 'user', empId,
       `Removed employee: ${emp.name} (data preserved)`,
@@ -211,19 +222,20 @@ router.delete('/:id', (req, res) => {
 
 // ─── POST /api/employees/:id/restore ─────────────────────────────────────────
 // Restores a previously removed employee — sets is_deleted back to 0.
-router.post('/:id/restore', (req, res) => {
+router.post('/:id/restore', async (req, res) => {
   try {
     const empId = parseInt(req.params.id);
 
-    const emp = db.prepare("SELECT id, name, is_deleted FROM users WHERE id = ? AND role = 'employee'").get(empId);
+    const [empRows] = await db.execute("SELECT id, name, is_deleted FROM users WHERE id = ? AND role = 'employee'", [empId]);
+    const emp = empRows[0];
     if (!emp) return res.status(404).json({ error: 'Employee not found.' });
     if (!emp.is_deleted) return res.status(400).json({ error: 'Employee is not removed.' });
 
-    db.prepare(`
+    await db.execute(`
       UPDATE users
       SET is_deleted = 0, is_active = 1, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(empId);
+    `, [empId]);
 
     logAudit(req.user.id, req.user.name, req.user.email, 'UPDATE', 'user', empId,
       `Restored employee: ${emp.name}`,
@@ -240,7 +252,7 @@ router.post('/:id/restore', (req, res) => {
 });
 
 // ─── POST /api/employees/:id/reset-password ───────────────────────────────────
-router.post('/:id/reset-password', (req, res) => {
+router.post('/:id/reset-password', async (req, res) => {
   try {
     const { new_password } = req.body;
     const empId = parseInt(req.params.id);
@@ -249,14 +261,15 @@ router.post('/:id/reset-password', (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 6 characters.' });
     }
 
-    const emp = db.prepare("SELECT id, name FROM users WHERE id = ? AND role = 'employee'").get(empId);
+    const [empRows] = await db.execute("SELECT id, name FROM users WHERE id = ? AND role = 'employee'", [empId]);
+    const emp = empRows[0];
     if (!emp) return res.status(404).json({ error: 'Employee not found.' });
 
     const hash = bcrypt.hashSync(new_password, 10);
-    db.prepare(`
+    await db.execute(`
       UPDATE users SET password_hash = ?, must_change_password = 1, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(hash, empId);
+    `, [hash, empId]);
 
     logAudit(req.user.id, req.user.name, req.user.email, 'UPDATE', 'user', empId,
       `Admin reset password for: ${emp.name}`, null, null, req.ip);

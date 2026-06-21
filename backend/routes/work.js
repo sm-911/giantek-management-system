@@ -12,8 +12,8 @@ const VALID_STATUSES = ['in_progress', 'completed'];
 const VALID_TIME = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8];
 
 // ─── Helper: get full work entry with employees and client ────────────────────
-const getFullWorkEntry = (id) => {
-  const entry = db.prepare(`
+const getFullWorkEntry = async (id) => {
+  const [rows] = await db.execute(`
     SELECT we.*,
            c.name as client_name,
            u.name as created_by_name
@@ -21,24 +21,26 @@ const getFullWorkEntry = (id) => {
     JOIN clients c ON we.client_id = c.id
     JOIN users u ON we.created_by = u.id
     WHERE we.id = ?
-  `).get(id);
+  `, [id]);
+  const entry = rows[0];
 
   if (!entry) return null;
 
   // Attach assigned employees
-  entry.employees = db.prepare(`
+  const [empRows] = await db.execute(`
     SELECT u.id, u.name, u.email
     FROM work_entry_employees wee
     JOIN users u ON wee.employee_id = u.id
     WHERE wee.work_entry_id = ?
-  `).all(id);
+  `, [id]);
+  entry.employees = empRows;
 
   return entry;
 };
 
 // ─── GET /api/work ────────────────────────────────────────────────────────────
 // Admin: all entries. Employee: only entries they are assigned to.
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const { status, client_id, work_type, priority, employee_id, date_from, date_to, search } = req.query;
 
   let query = `
@@ -84,25 +86,25 @@ router.get('/', (req, res) => {
 
   query += ` ORDER BY we.work_date DESC, we.created_at DESC`;
 
-  const entries = db.prepare(query).all(...params);
+  const [entries] = await db.execute(query, params);
 
   // Attach employees for each entry
-  const result = entries.map(entry => ({
-    ...entry,
-    employees: db.prepare(`
+  const result = await Promise.all(entries.map(async entry => {
+    const [empRows] = await db.execute(`
       SELECT u.id, u.name, u.email
       FROM work_entry_employees wee
       JOIN users u ON wee.employee_id = u.id
       WHERE wee.work_entry_id = ?
-    `).all(entry.id)
+    `, [entry.id]);
+    return { ...entry, employees: empRows };
   }));
 
   res.json(result);
 });
 
 // ─── GET /api/work/:id ────────────────────────────────────────────────────────
-router.get('/:id', (req, res) => {
-  const entry = getFullWorkEntry(parseInt(req.params.id));
+router.get('/:id', async (req, res) => {
+  const entry = await getFullWorkEntry(parseInt(req.params.id));
   if (!entry) return res.status(404).json({ error: 'Work entry not found.' });
 
   // Employees can only view entries they are assigned to
@@ -116,7 +118,7 @@ router.get('/:id', (req, res) => {
 
 // ─── POST /api/work ───────────────────────────────────────────────────────────
 // Employees and admin can create work entries.
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { client_id, status, work_type, misc_description, time_taken,
           priority, work_date, employee_ids } = req.body;
 
@@ -133,17 +135,17 @@ router.post('/', (req, res) => {
   if (misc_description && misc_description.trim().length > 100)
     return res.status(400).json({ error: 'Miscellaneous description must be under 100 characters.' });
 
-  const client = db.prepare('SELECT id FROM clients WHERE id = ?').get(client_id);
-  if (!client) return res.status(400).json({ error: 'Client not found.' });
+  const [clientRows] = await db.execute('SELECT id FROM clients WHERE id = ?', [client_id]);
+  if (!clientRows[0]) return res.status(400).json({ error: 'Client not found.' });
 
   const entryStatus = status && VALID_STATUSES.includes(status) ? status : 'in_progress';
   const entryDate = work_date || new Date().toISOString().split('T')[0];
 
-  const result = db.prepare(`
+  const [result] = await db.execute(`
     INSERT INTO work_entries
       (client_id, status, work_type, misc_description, time_taken, priority, work_date, created_by, is_locked)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  `, [
     client_id,
     entryStatus,
     work_type,
@@ -153,9 +155,9 @@ router.post('/', (req, res) => {
     entryDate,
     req.user.id,
     entryStatus === 'completed' ? 1 : 0
-  );
+  ]);
 
-  const newEntryId = result.lastInsertRowid;
+  const newEntryId = result.insertId;
 
   // Assign employees — always include creator, plus any extras specified
   const assignedIds = new Set([req.user.id]);
@@ -163,27 +165,29 @@ router.post('/', (req, res) => {
     employee_ids.forEach(id => assignedIds.add(parseInt(id)));
   }
 
-  const insertEmployee = db.prepare(`
-    INSERT OR IGNORE INTO work_entry_employees (work_entry_id, employee_id) VALUES (?, ?)
-  `);
-  assignedIds.forEach(empId => insertEmployee.run(newEntryId, empId));
+  for (const empId of assignedIds) {
+    await db.execute(
+      `INSERT IGNORE INTO work_entry_employees (work_entry_id, employee_id) VALUES (?, ?)`,
+      [newEntryId, empId]
+    );
+  }
 
   // Set completed_at if already marked completed
   if (entryStatus === 'completed') {
-    db.prepare('UPDATE work_entries SET completed_at = CURRENT_TIMESTAMP WHERE id = ?').run(newEntryId);
+    await db.execute('UPDATE work_entries SET completed_at = NOW() WHERE id = ?', [newEntryId]);
   }
 
-  const newEntry = getFullWorkEntry(newEntryId);
+  const newEntry = await getFullWorkEntry(newEntryId);
 
   logAudit(req.user.id, req.user.name, req.user.email, 'CREATE', 'work_entry', newEntryId,
-    `Created work entry for client ${newEntry.client_name}`, null, { client_id, work_type, status: entryStatus }, req.ip);
+    `Created work entry for client ${newEntry.client_name}`, null, { client_id, work_type, status: entryStatus }, req.ip).catch(console.error);
 
   // Notify admin when a new entry is created by employee
   if (req.user.role === 'employee') {
-    const admins = db.prepare("SELECT id FROM users WHERE role = 'admin' AND is_active = 1").all();
+    const [admins] = await db.execute("SELECT id FROM users WHERE role = 'admin' AND is_active = 1");
     admins.forEach(admin => {
       createNotification(admin.id, 'New Work Entry',
-        `${req.user.name} added work for client "${newEntry.client_name}" — ${work_type}`, 'info');
+        `${req.user.name} added work for client "${newEntry.client_name}" — ${work_type}`, 'info').catch(console.error);
     });
   }
 
@@ -193,19 +197,20 @@ router.post('/', (req, res) => {
 // ─── PUT /api/work/:id ────────────────────────────────────────────────────────
 // Employees can edit their own entries IF not locked.
 // Admin can edit any entry.
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   const entryId = parseInt(req.params.id);
-  const entry = db.prepare('SELECT * FROM work_entries WHERE id = ?').get(entryId);
+  const [entryRows] = await db.execute('SELECT * FROM work_entries WHERE id = ?', [entryId]);
+  const entry = entryRows[0];
 
   if (!entry) return res.status(404).json({ error: 'Work entry not found.' });
 
   // Employee access check
   if (req.user.role === 'employee') {
-    const isAssigned = db.prepare(`
+    const [assignedRows] = await db.execute(`
       SELECT 1 FROM work_entry_employees WHERE work_entry_id = ? AND employee_id = ?
-    `).get(entryId, req.user.id);
+    `, [entryId, req.user.id]);
 
-    if (!isAssigned) return res.status(403).json({ error: 'You are not assigned to this work entry.' });
+    if (!assignedRows[0]) return res.status(403).json({ error: 'You are not assigned to this work entry.' });
     if (entry.is_locked) return res.status(403).json({ error: 'This entry is locked. Contact admin to unlock.' });
   }
 
@@ -229,7 +234,7 @@ router.put('/:id', (req, res) => {
     priority: entry.priority
   };
 
-  db.prepare(`
+  await db.execute(`
     UPDATE work_entries SET
       status = ?,
       work_type = ?,
@@ -238,10 +243,10 @@ router.put('/:id', (req, res) => {
       priority = ?,
       work_date = ?,
       is_locked = ?,
-      completed_at = CASE WHEN ? = 'completed' AND completed_at IS NULL THEN CURRENT_TIMESTAMP ELSE completed_at END,
-      updated_at = CURRENT_TIMESTAMP
+      completed_at = CASE WHEN ? = 'completed' AND completed_at IS NULL THEN NOW() ELSE completed_at END,
+      updated_at = NOW()
     WHERE id = ?
-  `).run(
+  `, [
     newStatus,
     work_type || entry.work_type,
     work_type === 'Miscellaneous' ? (misc_description || entry.misc_description) : null,
@@ -251,28 +256,30 @@ router.put('/:id', (req, res) => {
     newStatus === 'completed' ? 1 : entry.is_locked,
     newStatus,
     entryId
-  );
+  ]);
 
   // Update assigned employees if provided (admin only)
   if (req.user.role === 'admin' && Array.isArray(employee_ids)) {
-    db.prepare('DELETE FROM work_entry_employees WHERE work_entry_id = ?').run(entryId);
-    const insertEmp = db.prepare(`
-      INSERT OR IGNORE INTO work_entry_employees (work_entry_id, employee_id) VALUES (?, ?)
-    `);
-    employee_ids.forEach(empId => insertEmp.run(entryId, parseInt(empId)));
+    await db.execute('DELETE FROM work_entry_employees WHERE work_entry_id = ?', [entryId]);
+    for (const empId of employee_ids) {
+      await db.execute(
+        `INSERT IGNORE INTO work_entry_employees (work_entry_id, employee_id) VALUES (?, ?)`,
+        [entryId, parseInt(empId)]
+      );
+    }
   }
 
-  const updated = getFullWorkEntry(entryId);
+  const updated = await getFullWorkEntry(entryId);
 
   logAudit(req.user.id, req.user.name, req.user.email, 'UPDATE', 'work_entry', entryId,
-    `Updated work entry #${entryId}`, oldValues, { status: newStatus, work_type }, req.ip);
+    `Updated work entry #${entryId}`, oldValues, { status: newStatus, work_type }, req.ip).catch(console.error);
 
   // Notify admin when employee completes work
   if (isNowCompleted && req.user.role === 'employee') {
-    const admins = db.prepare("SELECT id FROM users WHERE role = 'admin' AND is_active = 1").all();
+    const [admins] = await db.execute("SELECT id FROM users WHERE role = 'admin' AND is_active = 1");
     admins.forEach(admin => {
       createNotification(admin.id, 'Work Completed ✅',
-        `${req.user.name} marked work for "${updated.client_name}" as completed.`, 'success');
+        `${req.user.name} marked work for "${updated.client_name}" as completed.`, 'success').catch(console.error);
     });
   }
 
@@ -281,27 +288,32 @@ router.put('/:id', (req, res) => {
 
 // ─── POST /api/work/:id/unlock ────────────────────────────────────────────────
 // Admin unlocks a completed entry so employee can edit it again.
-router.post('/:id/unlock', adminOnly, (req, res) => {
+router.post('/:id/unlock', adminOnly, async (req, res) => {
   const entryId = parseInt(req.params.id);
 
-  const entry = db.prepare('SELECT * FROM work_entries WHERE id = ?').get(entryId);
-  if (!entry) return res.status(404).json({ error: 'Work entry not found.' });
+  const [entryRows] = await db.execute('SELECT * FROM work_entries WHERE id = ?', [entryId]);
+  if (!entryRows[0]) return res.status(404).json({ error: 'Work entry not found.' });
 
-  db.prepare('UPDATE work_entries SET is_locked = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(entryId);
+  await db.execute('UPDATE work_entries SET is_locked = 0, updated_at = NOW() WHERE id = ?', [entryId]);
 
   logAudit(req.user.id, req.user.name, req.user.email, 'UNLOCK', 'work_entry', entryId,
-    `Admin unlocked work entry #${entryId}`, { is_locked: 1 }, { is_locked: 0 }, req.ip);
+    `Admin unlocked work entry #${entryId}`, { is_locked: 1 }, { is_locked: 0 }, req.ip).catch(console.error);
 
   // Notify assigned employees
-  const assignedEmps = db.prepare(`
+  const [assignedEmps] = await db.execute(`
     SELECT u.id FROM work_entry_employees wee JOIN users u ON wee.employee_id = u.id
     WHERE wee.work_entry_id = ?
-  `).all(entryId);
-  const clientName = db.prepare('SELECT c.name FROM clients c JOIN work_entries we ON we.client_id = c.id WHERE we.id = ?').get(entryId);
+  `, [entryId]);
+
+  const [clientRows] = await db.execute(
+    'SELECT c.name FROM clients c JOIN work_entries we ON we.client_id = c.id WHERE we.id = ?',
+    [entryId]
+  );
+  const clientName = clientRows[0];
 
   assignedEmps.forEach(emp => {
     createNotification(emp.id, 'Work Entry Unlocked',
-      `Admin unlocked work entry for "${clientName?.name}". You can now edit it.`, 'info');
+      `Admin unlocked work entry for "${clientName?.name}". You can now edit it.`, 'info').catch(console.error);
   });
 
   res.json({ message: 'Work entry unlocked successfully.' });
@@ -309,20 +321,21 @@ router.post('/:id/unlock', adminOnly, (req, res) => {
 
 // ─── DELETE /api/work/:id ─────────────────────────────────────────────────────
 // Admin only.
-router.delete('/:id', adminOnly, (req, res) => {
+router.delete('/:id', adminOnly, async (req, res) => {
   const entryId = parseInt(req.params.id);
 
-  const entry = db.prepare(`
+  const [entryRows] = await db.execute(`
     SELECT we.*, c.name as client_name FROM work_entries we
     JOIN clients c ON we.client_id = c.id WHERE we.id = ?
-  `).get(entryId);
+  `, [entryId]);
+  const entry = entryRows[0];
 
   if (!entry) return res.status(404).json({ error: 'Work entry not found.' });
 
-  db.prepare('DELETE FROM work_entries WHERE id = ?').run(entryId);
+  await db.execute('DELETE FROM work_entries WHERE id = ?', [entryId]);
 
   logAudit(req.user.id, req.user.name, req.user.email, 'DELETE', 'work_entry', entryId,
-    `Deleted work entry for client "${entry.client_name}"`, entry, null, req.ip);
+    `Deleted work entry for client "${entry.client_name}"`, entry, null, req.ip).catch(console.error);
 
   res.json({ message: 'Work entry deleted.' });
 });
