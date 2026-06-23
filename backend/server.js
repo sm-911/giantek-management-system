@@ -27,21 +27,6 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ─── DB Initialization Middleware ─────────────────────────────────────────────
-let dbInitialized = false;
-app.use('/api', async (req, res, next) => {
-  if (!dbInitialized) {
-    try {
-      await db.initDB();
-      dbInitialized = true;
-    } catch (err) {
-      console.error('DB Init Error Middleware:', err);
-      return next(err);
-    }
-  }
-  next();
-});
-
 // ─── Mount Routes ─────────────────────────────────────────────────────────────
 app.use('/api/auth',          authRoutes);
 app.use('/api/employees',     employeeRoutes);
@@ -63,7 +48,7 @@ app.get('/api/health', async (req, res) => {
       db_time: result[0].time
     });
   } catch (err) {
-    res.status(500).json({ status: 'error', error: err.message, stack: err.stack });
+    res.status(500).json({ status: 'error', error: err.message });
   }
 });
 
@@ -73,19 +58,26 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error. Please try again.' });
 });
 
-// ─── Start Server ─────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log('');
-  console.log('  ██████╗ ██╗ █████╗ ███╗   ██╗████████╗███████╗██╗  ██╗');
-  console.log('  ██╔════╝ ██║██╔══██╗████╗  ██║╚══██╔══╝██╔════╝██║ ██╔╝');
-  console.log('  ██║  ███╗██║███████║██╔██╗ ██║   ██║   █████╗  █████╔╝ ');
-  console.log('  ██║   ██║██║██╔══██║██║╚██╗██║   ██║   ██╔══╝  ██╔═██╗ ');
-  console.log('  ╚██████╔╝██║██║  ██║██║ ╚████║   ██║   ███████╗██║  ██╗');
-  console.log('   ╚═════╝ ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝   ╚══════╝╚═╝  ╚═╝');
-  console.log('');
-  console.log(`  🚀 Server running at  http://localhost:${PORT}`);
-  console.log(`  📦 Database           MySQL — Render Ready`);
-  console.log(`  🔗 Frontend origin    ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
-  console.log(`  👤 Admin login        admin@giantek.com / Admin@123`);
-  console.log('');
-});
+// ─── Start Server (DB init first, then listen) ────────────────────────────────
+db.initDB()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log('');
+      console.log('  ██████╗ ██╗ █████╗ ███╗   ██╗████████╗███████╗██╗  ██╗');
+      console.log('  ██╔════╝ ██║██╔══██╗████╗  ██║╚══██╔══╝██╔════╝██║ ██╔╝');
+      console.log('  ██║  ███╗██║███████║██╔██╗ ██║   ██║   █████╗  █████╔╝ ');
+      console.log('  ██║   ██║██║██╔══██║██║╚██╗██║   ██║   ██╔══╝  ██╔═██╗ ');
+      console.log('  ╚██████╔╝██║██║  ██║██║ ╚████║   ██║   ███████╗██║  ██╗');
+      console.log('   ╚═════╝ ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝   ╚══════╝╚═╝  ╚═╝');
+      console.log('');
+      console.log(`  🚀 Server running at  http://localhost:${PORT}`);
+      console.log(`  📦 Database           MySQL — Render Ready`);
+      console.log(`  🔗 Frontend origin    ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
+      console.log(`  👤 Admin login        admin@giantek.com / Admin@123`);
+      console.log('');
+    });
+  })
+  .catch((err) => {
+    console.error('❌ Failed to initialize database. Server not started.', err);
+    process.exit(1);
+  });

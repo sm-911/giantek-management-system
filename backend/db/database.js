@@ -8,14 +8,14 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  multipleStatements: true
+  ssl: dbUri.includes('aiven') || dbUri.includes('ssl') ? { rejectUnauthorized: false } : undefined
 });
 
 // ─── CREATE ALL TABLES ─────────────────────────────────────────────────────────
 
 const createTables = async () => {
-  const schema = `
-    CREATE TABLE IF NOT EXISTS users (
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS users (
       id                   INT AUTO_INCREMENT PRIMARY KEY,
       name                 VARCHAR(255) NOT NULL,
       email                VARCHAR(255) UNIQUE NOT NULL,
@@ -27,9 +27,8 @@ const createTables = async () => {
       is_deleted           TINYINT(1) NOT NULL DEFAULT 0,
       created_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at           DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS clients (
+    )`,
+    `CREATE TABLE IF NOT EXISTS clients (
       id             INT AUTO_INCREMENT PRIMARY KEY,
       name           VARCHAR(255) NOT NULL,
       contact_number VARCHAR(50),
@@ -40,9 +39,8 @@ const createTables = async () => {
       created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS work_entries (
+    )`,
+    `CREATE TABLE IF NOT EXISTS work_entries (
       id               INT AUTO_INCREMENT PRIMARY KEY,
       client_id        INT NOT NULL,
       status           VARCHAR(50) NOT NULL DEFAULT 'in_progress',
@@ -50,7 +48,7 @@ const createTables = async () => {
       misc_description TEXT,
       time_taken       FLOAT NOT NULL,
       priority         VARCHAR(50) NOT NULL DEFAULT 'Medium',
-      work_date        DATE NOT NULL DEFAULT (CURRENT_DATE),
+      work_date        DATE NOT NULL,
       created_by       INT NOT NULL,
       completed_at     DATETIME NULL,
       is_locked        TINYINT(1) NOT NULL DEFAULT 0,
@@ -58,17 +56,15 @@ const createTables = async () => {
       updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
       FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS work_entry_employees (
+    )`,
+    `CREATE TABLE IF NOT EXISTS work_entry_employees (
       work_entry_id INT NOT NULL,
       employee_id   INT NOT NULL,
       PRIMARY KEY (work_entry_id, employee_id),
       FOREIGN KEY (work_entry_id) REFERENCES work_entries(id) ON DELETE CASCADE,
       FOREIGN KEY (employee_id) REFERENCES users(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS revenue (
+    )`,
+    `CREATE TABLE IF NOT EXISTS revenue (
       id            INT AUTO_INCREMENT PRIMARY KEY,
       employee_id   INT NOT NULL,
       client_id     INT NOT NULL,
@@ -83,9 +79,8 @@ const createTables = async () => {
       FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
       FOREIGN KEY (work_entry_id) REFERENCES work_entries(id) ON DELETE SET NULL,
       FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS password_resets (
+    )`,
+    `CREATE TABLE IF NOT EXISTS password_resets (
       id         INT AUTO_INCREMENT PRIMARY KEY,
       user_id    INT NOT NULL,
       token      VARCHAR(255) NOT NULL UNIQUE,
@@ -93,9 +88,8 @@ const createTables = async () => {
       used       TINYINT(1) DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS audit_log (
+    )`,
+    `CREATE TABLE IF NOT EXISTS audit_log (
       id          INT AUTO_INCREMENT PRIMARY KEY,
       user_id     INT NULL,
       user_name   VARCHAR(255),
@@ -109,9 +103,8 @@ const createTables = async () => {
       ip_address  VARCHAR(255),
       created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS notifications (
+    )`,
+    `CREATE TABLE IF NOT EXISTS notifications (
       id         INT AUTO_INCREMENT PRIMARY KEY,
       user_id    INT NOT NULL,
       title      VARCHAR(255) NOT NULL,
@@ -121,10 +114,12 @@ const createTables = async () => {
       is_read    TINYINT(1) DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    );
-  `;
+    )`
+  ];
 
-  await pool.query(schema);
+  for (const sql of statements) {
+    await pool.query(sql);
+  }
 };
 
 // ─── SEED DEFAULT ADMIN ────────────────────────────────────────────────────────
