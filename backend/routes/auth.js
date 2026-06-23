@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db/database');
 const { authenticate, logAudit } = require('../middleware/auth');
+const { sendPasswordResetEmail } = require('../utils/mailer');
 
 const router = express.Router();
 
@@ -103,7 +104,7 @@ router.post('/change-password', authenticate, async (req, res) => {
 });
 
 // ─── POST /api/auth/forgot-password ──────────────────────────────────────────
-// Generates a reset token. Since no email server exists, admin sees the token.
+// Generates a reset token and sends it via email to the user.
 router.post('/forgot-password', async (req, res) => {
   const { email } = req.body;
 
@@ -111,18 +112,21 @@ router.post('/forgot-password', async (req, res) => {
     return res.status(400).json({ error: 'Email is required.' });
   }
 
-  const [rows] = await db.execute('SELECT id, name FROM users WHERE email = ? AND is_active = 1', [email.toLowerCase().trim()]);
+  const [rows] = await db.execute(
+    'SELECT id, name, email FROM users WHERE email = ? AND is_active = 1',
+    [email.toLowerCase().trim()]
+  );
   const user = rows[0];
 
   // Always return success to prevent email enumeration
   if (!user) {
-    return res.json({ message: 'If this email is registered, a reset request has been created. Contact your admin for the token.' });
+    return res.json({ message: 'If this email is registered, a password reset link has been sent to it.' });
   }
 
   // Invalidate any existing tokens for this user
-  await db.execute("UPDATE password_resets SET used = 1 WHERE user_id = ? AND used = 0", [user.id]);
+  await db.execute('UPDATE password_resets SET used = 1 WHERE user_id = ? AND used = 0', [user.id]);
 
-  // Generate a short readable token (6 chars uppercase)
+  // Generate a short readable token (8 chars uppercase)
   const token = uuidv4().replace(/-/g, '').substring(0, 8).toUpperCase();
 
   // Token expires in 1 hour
@@ -132,7 +136,24 @@ router.post('/forgot-password', async (req, res) => {
     VALUES (?, ?, ?, 0)
   `, [user.id, token, expiresAt]);
 
-  res.json({ message: 'Reset request created. Contact your admin to get the token.' });
+  // Send email — if email is not configured, log a warning
+  if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    try {
+      await sendPasswordResetEmail({
+        toEmail: user.email,
+        toName: user.name,
+        token,
+        expiresInMinutes: 60
+      });
+    } catch (emailErr) {
+      console.error('⚠️  Failed to send reset email:', emailErr.message);
+      // Don't fail the request — token is still stored in DB
+    }
+  } else {
+    console.warn('⚠️  EMAIL_USER/EMAIL_PASS not set. Reset token for', user.email, ':', token);
+  }
+
+  res.json({ message: 'If this email is registered, a password reset link has been sent to it.' });
 });
 
 // ─── POST /api/auth/reset-password ───────────────────────────────────────────

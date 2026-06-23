@@ -131,8 +131,8 @@ const seedAdmin = async () => {
     await pool.execute(`
       INSERT INTO users (name, email, password_hash, mobile, role, is_active, must_change_password)
       VALUES (?, ?, ?, ?, 'admin', 1, 0)
-    `, ['Admin', 'admin@giantek.com', passwordHash, '']);
-    console.log('✅ Admin seeded — Email: admin@giantek.com | Password: Admin@123');
+    `, ['Admin', 'mukherjeenassociates@gmail.com', passwordHash, '']);
+    console.log('✅ Admin seeded — Email: mukherjeenassociates@gmail.com | Password: Admin@123');
   }
 };
 

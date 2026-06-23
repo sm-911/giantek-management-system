@@ -36,7 +36,7 @@ const Login = () => {
     setLoading(true);
     try {
       await api.post('/auth/forgot-password', { email: forgotEmail });
-      toast.success('Request sent! Contact your admin for the reset token.');
+      toast.success('Reset token sent! Check your email inbox (and spam folder).');
       setTab('reset');
       setResetForm(p => ({ ...p, email: forgotEmail }));
     } catch (err) {
@@ -119,7 +119,7 @@ const Login = () => {
         {tab === 'forgot' && (
           <>
             <h2 className="login-card__title">Forgot Password</h2>
-            <p className="login-card__sub">Enter your email to submit a reset request. Your admin will provide a token.</p>
+            <p className="login-card__sub">Enter your registered email. We'll send you a reset token right away.</p>
             <form onSubmit={handleForgot} className="form">
               <div className="form__group">
                 <label className="form__label">Email Address</label>
