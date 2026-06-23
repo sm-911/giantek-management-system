@@ -1,8 +1,11 @@
 import axios from 'axios';
 
 // Create a shared Axios instance with base URL and auth header
+const rawUrl = import.meta.env.VITE_API_URL;
+const baseURL = rawUrl ? (rawUrl.endsWith('/api') ? rawUrl : `${rawUrl}/api`) : '/api';
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
+  baseURL,
   timeout: 15000,
   headers: { 'Content-Type': 'application/json' }
 });
