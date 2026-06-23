@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Create a shared Axios instance with base URL and auth header
 const api = axios.create({
-  baseURL: '/api',   // Proxied to http://localhost:5000/api by Vite
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   timeout: 15000,
   headers: { 'Content-Type': 'application/json' }
 });
