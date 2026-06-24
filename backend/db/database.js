@@ -133,6 +133,12 @@ const seedAdmin = async () => {
       VALUES (?, ?, ?, ?, 'admin', 1, 0)
     `, ['Admin', 'mukherjeenassociates@gmail.com', passwordHash, '']);
     console.log('✅ Admin seeded — Email: mukherjeenassociates@gmail.com | Password: Admin@123');
+  } else {
+    // Force update the existing admin to the new email
+    await pool.execute(`
+      UPDATE users SET email = ? WHERE role = 'admin'
+    `, ['mukherjeenassociates@gmail.com']);
+    console.log('✅ Admin email verified/updated to mukherjeenassociates@gmail.com');
   }
 };
 
