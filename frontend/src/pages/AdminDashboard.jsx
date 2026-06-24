@@ -8,7 +8,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 import {
-  MdWork, MdPeople, MdBusiness, MdAttachMoney,
+  MdWork, MdPeople, MdBusiness, MdCurrencyRupee,
   MdCheckCircle, MdPending, MdToday, MdAccessTime
 } from 'react-icons/md';
 
@@ -86,7 +86,7 @@ const AdminDashboard = () => {
           <StatCard label="Total Clients" value={summary?.totalClients ?? 0}
             icon={<MdBusiness size={24} />} color="#8b5cf6" />
           <StatCard label="Total Revenue" value={formatCurrency(summary?.totalRevenue ?? 0)}
-            icon={<MdAttachMoney size={24} />} color="#10b981" subtext="All time" />
+            icon={<MdCurrencyRupee size={24} />} color="#10b981" subtext="All time" />
           <StatCard label="Total Hours Logged" value={`${summary?.totalHours ?? 0} hrs`}
             icon={<MdAccessTime size={24} />} color="#f59e0b" />
           <StatCard label="Today's Work" value={summary?.todayWork ?? 0}

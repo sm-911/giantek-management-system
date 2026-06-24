@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   MdDashboard, MdPeople, MdBusiness, MdWork,
-  MdAttachMoney, MdBarChart, MdHistory, MdClose
+  MdCurrencyRupee, MdBarChart, MdHistory, MdClose
 } from 'react-icons/md';
 
 // Navigation links for Admin role
@@ -11,7 +11,7 @@ const adminLinks = [
   { to: '/admin/employees', label: 'Employees',    icon: MdPeople },
   { to: '/admin/clients',   label: 'Clients',      icon: MdBusiness },
   { to: '/admin/work',      label: 'Work Entries', icon: MdWork },
-  { to: '/admin/revenue',   label: 'Revenue',      icon: MdAttachMoney },
+  { to: '/admin/revenue',   label: 'Revenue',      icon: MdCurrencyRupee },
   { to: '/admin/reports',   label: 'Reports',      icon: MdBarChart },
   { to: '/admin/audit',     label: 'Audit Log',    icon: MdHistory },
 ];
