@@ -19,7 +19,7 @@ A full-stack **Employee & Client Management Portal** for **Giantek Consultancy S
 |----------|---------------------------------------|
 | Frontend | React 18, Vite, Recharts, React Icons |
 | Backend  | Node.js, Express                      |
-| Database | MySQL (hosted on Render / Aiven / etc.) |
+| Database | MySQL (hosted on Render / Aiven) |
 | Auth     | JWT + bcrypt                          |
 | Styling  | Vanilla CSS                           |
 
