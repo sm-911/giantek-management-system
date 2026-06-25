@@ -1,21 +1,41 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Layout from '../components/Layout';
 import RevenueModal from '../components/RevenueModal';
 import StatCard from '../components/StatCard';
 import api from '../api/axios';
 import { toast } from 'react-toastify';
 import { formatDate, formatCurrency, getErrorMessage, WORK_TYPES } from '../utils/helpers';
-import { MdAdd, MdEdit, MdDelete, MdSearch, MdAttachMoney } from 'react-icons/md';
+import { MdAdd, MdEdit, MdDelete, MdSearch, MdCurrencyRupee, MdFilterList } from 'react-icons/md';
+
+// Generate last 24 months as options
+const generateMonthOptions = () => {
+  const options = [];
+  const now = new Date();
+  for (let i = 0; i < 24; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = d.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+    options.push({ value, label });
+  }
+  return options;
+};
+
+const MONTH_OPTIONS = generateMonthOptions();
 
 const Revenue = () => {
   const [records, setRecords] = useState([]);
-  const [filtered, setFiltered] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [clients, setClients] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ search: '', employee_id: '', client_id: '', work_type: '' });
+  const [filters, setFilters] = useState({
+    search: '',
+    employee_id: '',
+    client_id: '',
+    work_type: '',
+    month: ''   // format: 'YYYY-MM'
+  });
 
   const fetchData = async () => {
     setLoading(true);
@@ -39,15 +59,21 @@ const Revenue = () => {
 
   useEffect(() => { fetchData(); }, [filters.employee_id, filters.client_id, filters.work_type]);
 
-  useEffect(() => {
+  // Apply search + month filter client-side
+  const filtered = useMemo(() => {
     const q = filters.search.toLowerCase();
-    setFiltered(records.filter(r =>
-      !q ||
-      r.employee_name?.toLowerCase().includes(q) ||
-      r.client_name?.toLowerCase().includes(q) ||
-      r.work_type?.toLowerCase().includes(q)
-    ));
-  }, [records, filters.search]);
+    return records.filter(r => {
+      const matchSearch = !q ||
+        r.employee_name?.toLowerCase().includes(q) ||
+        r.client_name?.toLowerCase().includes(q) ||
+        r.work_type?.toLowerCase().includes(q);
+
+      const matchMonth = !filters.month ||
+        (r.created_at && r.created_at.startsWith(filters.month));
+
+      return matchSearch && matchMonth;
+    });
+  }, [records, filters.search, filters.month]);
 
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this revenue record?')) return;
@@ -66,6 +92,10 @@ const Revenue = () => {
     total: filtered.filter(r => r.employee_id === emp.id).reduce((s, r) => s + r.value, 0)
   })).filter(e => e.total > 0).sort((a, b) => b.total - a.total);
 
+  const selectedMonthLabel = filters.month
+    ? MONTH_OPTIONS.find(m => m.value === filters.month)?.label
+    : 'All Time';
+
   return (
     <Layout>
       <div className="page">
@@ -79,33 +109,57 @@ const Revenue = () => {
           </button>
         </div>
 
-        {/* Summary */}
+        {/* Summary Cards */}
         <div className="stat-grid stat-grid--3">
-          <StatCard label="Total Revenue" value={formatCurrency(totalRevenue)}
-            icon={<MdAttachMoney size={24} />} color="var(--success)" subtext={`${filtered.length} entries`} />
+          <StatCard
+            label={`Total Revenue${filters.month ? ` — ${selectedMonthLabel}` : ''}`}
+            value={formatCurrency(totalRevenue)}
+            icon={<MdCurrencyRupee size={24} />}
+            color="var(--success)"
+            subtext={`${filtered.length} entries`}
+          />
           {empRevenue.slice(0, 2).map(e => (
-            <StatCard key={e.name} label={`${e.name}`} value={formatCurrency(e.total)}
-              icon={<MdAttachMoney size={24} />} color="var(--primary)" subtext="Revenue generated" />
+            <StatCard key={e.name} label={e.name} value={formatCurrency(e.total)}
+              icon={<MdCurrencyRupee size={24} />} color="var(--primary)" subtext="Revenue generated" />
           ))}
         </div>
 
         {/* Filters */}
         <div className="filter-row">
+          {/* Search */}
           <div className="search-bar" style={{ flex: 1 }}>
             <MdSearch size={18} className="search-bar__icon" />
             <input className="search-bar__input" placeholder="Search employee, client..."
               value={filters.search} onChange={e => setFilters(p => ({ ...p, search: e.target.value }))} />
           </div>
-          <select className="form__input form__input--sm" style={{ width: '180px' }}
+
+          {/* Month filter */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <MdFilterList size={18} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+            <select className="form__input form__input--sm" style={{ width: '190px' }}
+              value={filters.month} onChange={e => setFilters(p => ({ ...p, month: e.target.value }))}>
+              <option value="">All Months</option>
+              {MONTH_OPTIONS.map(m => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Employee filter */}
+          <select className="form__input form__input--sm" style={{ width: '175px' }}
             value={filters.employee_id} onChange={e => setFilters(p => ({ ...p, employee_id: e.target.value }))}>
             <option value="">All Employees</option>
             {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
           </select>
-          <select className="form__input form__input--sm" style={{ width: '180px' }}
+
+          {/* Client filter */}
+          <select className="form__input form__input--sm" style={{ width: '175px' }}
             value={filters.client_id} onChange={e => setFilters(p => ({ ...p, client_id: e.target.value }))}>
             <option value="">All Clients</option>
             {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
+
+          {/* Work type filter */}
           <select className="form__input form__input--sm" style={{ width: '160px' }}
             value={filters.work_type} onChange={e => setFilters(p => ({ ...p, work_type: e.target.value }))}>
             <option value="">All Work Types</option>
