@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 import { toast } from 'react-toastify';
 import { getErrorMessage } from '../utils/helpers';
+import { useTheme } from '../context/ThemeContext';
+import { MdLightMode, MdDarkMode } from 'react-icons/md';
 
 const Login = () => {
   const [tab, setTab] = useState('login'); // 'login' | 'forgot' | 'reset'
@@ -13,6 +15,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
 
   // ── Login ──────────────────────────────────────────────────────────────────
   const handleLogin = async (e) => {
@@ -70,6 +73,21 @@ const Login = () => {
 
   return (
     <div className="login-page">
+      {/* Theme Toggle (Top Right) */}
+      <button 
+        onClick={toggleTheme}
+        style={{
+          position: 'absolute', top: '24px', right: '24px', zIndex: 10,
+          background: 'var(--bg-card)', border: '1px solid var(--border)',
+          color: 'var(--text-secondary)', padding: '10px', borderRadius: '50%',
+          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: 'var(--shadow-sm)', transition: 'all 0.2s ease'
+        }}
+        title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+      >
+        {theme === 'dark' ? <MdLightMode size={22} /> : <MdDarkMode size={22} />}
+      </button>
+
       {/* Background decoration */}
       <div className="login-page__bg">
         <div className="login-page__blob login-page__blob--1" />
