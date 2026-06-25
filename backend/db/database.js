@@ -146,6 +146,18 @@ const initDB = async () => {
   try {
     await createTables();
     await seedAdmin();
+    
+    // Migration: add ip_address to audit_log if missing
+    try {
+      await pool.query('ALTER TABLE audit_log ADD COLUMN ip_address VARCHAR(255)');
+      console.log('✅ Migration: Added ip_address to audit_log');
+    } catch (e) {
+      // Ignore error if column already exists (Error 1060: Duplicate column name)
+      if (e.errno !== 1060) {
+        console.error('Migration error:', e.message);
+      }
+    }
+
     console.log('✅ Database initialized successfully');
   } catch (error) {
     console.error('❌ Database initialization failed:', error);
