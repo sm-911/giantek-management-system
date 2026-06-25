@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import ClientModal from '../components/ClientModal';
+import ClientDetailDrawer from '../components/ClientDetailDrawer';
 import api from '../api/axios';
 import { toast } from 'react-toastify';
 import { formatDate, getErrorMessage } from '../utils/helpers';
 import { useAuth } from '../context/AuthContext';
-import { MdAdd, MdEdit, MdDelete, MdSearch, MdBusiness } from 'react-icons/md';
+import { MdAdd, MdEdit, MdDelete, MdSearch, MdBusiness, MdOpenInNew } from 'react-icons/md';
 
 const Clients = () => {
   const { user } = useAuth();
@@ -16,6 +17,7 @@ const Clients = () => {
   const [showModal, setShowModal] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [selectedClient, setSelectedClient] = useState(null); // for drawer
 
   const fetchClients = async () => {
     try {
@@ -37,13 +39,21 @@ const Clients = () => {
     ));
   }, [search, clients]);
 
-  const handleDelete = async (client) => {
+  const handleDelete = async (e, client) => {
+    e.stopPropagation(); // prevent opening drawer
     if (!window.confirm(`Delete client "${client.name}"? This cannot be undone.`)) return;
     try {
       await api.delete(`/clients/${client.id}`);
       toast.success(`Client "${client.name}" deleted.`);
+      if (selectedClient?.id === client.id) setSelectedClient(null);
       fetchClients();
     } catch (err) { toast.error(getErrorMessage(err)); }
+  };
+
+  const handleEdit = (e, client) => {
+    e.stopPropagation(); // prevent opening drawer
+    setEditTarget(client);
+    setShowModal(true);
   };
 
   return (
@@ -54,9 +64,11 @@ const Clients = () => {
             <h1 className="page__title">Clients</h1>
             <p className="page__subtitle">{clients.length} client{clients.length !== 1 ? 's' : ''} registered</p>
           </div>
-          <button className="btn btn--primary" onClick={() => { setEditTarget(null); setShowModal(true); }}>
-            <MdAdd size={18} /> Add Client
-          </button>
+          {isAdmin && (
+            <button className="btn btn--primary" onClick={() => { setEditTarget(null); setShowModal(true); }}>
+              <MdAdd size={18} /> Add Client
+            </button>
+          )}
         </div>
 
         {/* Search */}
@@ -72,15 +84,32 @@ const Clients = () => {
         ) : filtered.length === 0 ? (
           <div className="empty-state">
             <MdBusiness size={48} />
-            <p>No clients found. {!isAdmin && 'Add your first client to get started.'}</p>
-            <button className="btn btn--primary" onClick={() => setShowModal(true)}>
-              <MdAdd size={16} /> Add Client
-            </button>
+            <p>No clients found. {isAdmin && 'Add your first client to get started.'}</p>
+            {isAdmin && (
+              <button className="btn btn--primary" onClick={() => setShowModal(true)}>
+                <MdAdd size={16} /> Add Client
+              </button>
+            )}
           </div>
         ) : (
           <div className="client-grid">
             {filtered.map(client => (
-              <div key={client.id} className="client-card">
+              <div
+                key={client.id}
+                className="client-card client-card--clickable"
+                onClick={() => setSelectedClient(client)}
+                title="Click to view work entries & revenue"
+                style={{ cursor: 'pointer', position: 'relative' }}
+              >
+                {/* "View Details" hint */}
+                <div style={{
+                  position: 'absolute', top: '10px', right: isAdmin ? '70px' : '12px',
+                  fontSize: '11px', color: 'var(--accent)', opacity: 0.7,
+                  display: 'flex', alignItems: 'center', gap: '3px'
+                }}>
+                  <MdOpenInNew size={12} /> View
+                </div>
+
                 <div className="client-card__header">
                   <div className="client-card__avatar">
                     {client.name.charAt(0).toUpperCase()}
@@ -92,11 +121,11 @@ const Clients = () => {
                     )}
                   </div>
                   {isAdmin && (
-                    <div className="action-btns">
-                      <button className="icon-btn" title="Edit" onClick={() => { setEditTarget(client); setShowModal(true); }}>
+                    <div className="action-btns" onClick={e => e.stopPropagation()}>
+                      <button className="icon-btn" title="Edit" onClick={e => handleEdit(e, client)}>
                         <MdEdit size={15} />
                       </button>
-                      <button className="icon-btn icon-btn--danger" title="Delete" onClick={() => handleDelete(client)}>
+                      <button className="icon-btn icon-btn--danger" title="Delete" onClick={e => handleDelete(e, client)}>
                         <MdDelete size={15} />
                       </button>
                     </div>
@@ -113,6 +142,14 @@ const Clients = () => {
           </div>
         )}
       </div>
+
+      {/* Client detail drawer */}
+      {selectedClient && (
+        <ClientDetailDrawer
+          client={selectedClient}
+          onClose={() => setSelectedClient(null)}
+        />
+      )}
 
       {showModal && (
         <ClientModal
