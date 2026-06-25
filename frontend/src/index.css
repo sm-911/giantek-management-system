@@ -133,8 +133,12 @@
   --border:         #D0CCB8;
   --border-light:   #BDB8A0;
 
-  --sidebar-bg:     var(--navy-900);
-  --sidebar-text:   #6A85A8;
+  --sidebar-bg:            #E8E5D8;
+  --sidebar-text:          #4A5E78;
+  --sidebar-active-bg:     rgba(110, 125, 51, 0.14);
+  --sidebar-active-text:   #4A5A1A;
+  --sidebar-hover-bg:      rgba(0,0,0,0.05);
+  --grad-sidebar:          linear-gradient(180deg, #E8E5D8 0%, #DEDAD0 100%);
 
   --navbar-bg:      rgba(253, 252, 248, 0.96);
 
@@ -341,7 +345,7 @@ input, select, textarea { font-family: inherit; }
 
 .sidebar__link:hover {
   background: var(--sidebar-hover-bg);
-  color: #C8D4E8;
+  color: var(--text-primary);
   text-decoration: none;
 }
 
@@ -363,7 +367,7 @@ input, select, textarea { font-family: inherit; }
   border-radius: 0 3px 3px 0;
 }
 
-.sidebar__link--active .sidebar__link-icon { color: var(--olive-300); }
+.sidebar__link--active .sidebar__link-icon { color: var(--sidebar-active-text); }
 .sidebar__link-icon { flex-shrink: 0; opacity: 0.7; }
 .sidebar__link--active .sidebar__link-icon { opacity: 1; }
 .sidebar__link:hover .sidebar__link-icon { opacity: 1; }
