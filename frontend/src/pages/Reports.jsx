@@ -95,7 +95,9 @@ const Reports = () => {
                 <XAxis dataKey="month" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
                 <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} tickFormatter={v => `₹${(v/1000).toFixed(0)}K`} />
                 <Tooltip formatter={v => [formatCurrency(v), 'Revenue']}
-                  contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }} />
+                  contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }}
+                  itemStyle={{ color: 'var(--text-primary)' }}
+                  labelStyle={{ color: 'var(--text-primary)' }} />
                 <Bar dataKey="total_revenue" name="Revenue" fill="#6366f1" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -110,7 +112,10 @@ const Reports = () => {
                   cx="50%" cy="50%" outerRadius={90}>
                   {workTypeStats.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
-                <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }} />
+                <Tooltip 
+                  contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }}
+                  itemStyle={{ color: 'var(--text-primary)' }}
+                  labelStyle={{ color: 'var(--text-primary)' }} />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
@@ -124,7 +129,10 @@ const Reports = () => {
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis type="number" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
                 <YAxis type="category" dataKey="priority" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} width={60} />
-                <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }} />
+                <Tooltip 
+                  contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }}
+                  itemStyle={{ color: 'var(--text-primary)' }}
+                  labelStyle={{ color: 'var(--text-primary)' }} />
                 <Legend />
                 <Bar dataKey="completed" name="Completed" fill="#10b981" stackId="a" radius={[0, 4, 4, 0]} />
                 <Bar dataKey="total" name="Total" fill="#6366f180" stackId="b" radius={[0, 4, 4, 0]} />
