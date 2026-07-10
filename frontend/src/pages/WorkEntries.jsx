@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import WorkModal from '../components/WorkModal';
 import api from '../api/axios';
@@ -13,6 +14,8 @@ import { MdAdd, MdEdit, MdDelete, MdLockOpen, MdSearch, MdFilterList, MdClear } 
 const WorkEntries = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const [searchParams] = useSearchParams();
+  const initialStatus = searchParams.get('status') || '';
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -22,7 +25,7 @@ const WorkEntries = () => {
 
   // Filters
   const [filters, setFilters] = useState({
-    search: '', status: '', work_type: '', priority: '',
+    search: '', status: initialStatus, work_type: '', priority: '',
     employee_id: '', client_id: '', date_from: '', date_to: ''
   });
   const [showFilters, setShowFilters] = useState(false);
@@ -200,7 +203,7 @@ const WorkEntries = () => {
                         style={{ color: getStatusColor(entry.status), background: `${getStatusColor(entry.status)}22` }}>
                         {getStatusLabel(entry.status)}
                       </span>
-                      {entry.is_locked && !isAdmin && (
+                      {!!entry.is_locked && !isAdmin && (
                         <span className="lock-icon" title="Locked for editing">🔒</span>
                       )}
                     </td>
@@ -217,7 +220,7 @@ const WorkEntries = () => {
                             <MdEdit size={16} />
                           </button>
                         )}
-                        {isAdmin && entry.is_locked && (
+                        {isAdmin && !!entry.is_locked && (
                           <button className="icon-btn" title="Unlock for employee editing"
                             onClick={() => handleUnlock(entry)}>
                             <MdLockOpen size={16} />

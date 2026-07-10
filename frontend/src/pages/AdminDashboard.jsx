@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import StatCard from '../components/StatCard';
 import api from '../api/axios';
@@ -156,6 +157,7 @@ const AdminDashboard = () => {
   const [recentWork, setRecentWork] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showHoursModal, setShowHoursModal] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -215,8 +217,11 @@ const AdminDashboard = () => {
             icon={<MdWork size={24} />} color="var(--primary)" subtext={`${summary?.todayWork ?? 0} today`} />
           <StatCard label="Completed" value={summary?.completedWork ?? 0}
             icon={<MdCheckCircle size={24} />} color="var(--success)" subtext="All time" />
-          <StatCard label="In Progress" value={summary?.inProgressWork ?? 0}
-            icon={<MdPending size={24} />} color="var(--warning)" subtext="Pending" />
+          <div onClick={() => navigate('/admin/work?status=in_progress')} style={{ cursor: 'pointer' }} title="Click to view in-progress work">
+            <StatCard label="In Progress" value={summary?.inProgressWork ?? 0}
+              icon={<MdPending size={24} />} color="var(--warning)"
+              subtext={<span style={{ color: 'var(--warning)', fontSize: '11px' }}>↗ Click to view</span>} />
+          </div>
           <StatCard label="Total Employees" value={summary?.totalEmployees ?? 0}
             icon={<MdPeople size={24} />} color="var(--secondary)" />
           <StatCard label="Total Clients" value={summary?.totalClients ?? 0}
