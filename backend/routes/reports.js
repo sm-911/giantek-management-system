@@ -172,4 +172,40 @@ router.get('/client-history/:id', async (req, res) => {
   res.json(result);
 });
 
+// ─── GET /api/reports/hours-by-employee ──────────────────────────────────────
+// Hours logged per employee, filtered by period: daily | weekly | monthly
+router.get('/hours-by-employee', async (req, res) => {
+  const { period = 'weekly' } = req.query;
+
+  let dateFilter;
+  let periodLabel;
+  if (period === 'daily') {
+    dateFilter = 'AND we.work_date = CURDATE()';
+    periodLabel = 'Today';
+  } else if (period === 'monthly') {
+    dateFilter = 'AND we.work_date >= DATE_FORMAT(CURDATE(), \'%Y-%m-01\')';
+    periodLabel = 'This Month';
+  } else {
+    // weekly — last 7 days including today
+    dateFilter = 'AND we.work_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)';
+    periodLabel = 'This Week (Last 7 Days)';
+  }
+
+  const [rows] = await db.execute(`
+    SELECT
+      u.id,
+      u.name,
+      COALESCE(SUM(we.time_taken), 0) as hours_logged,
+      COUNT(DISTINCT we.id) as entry_count
+    FROM users u
+    LEFT JOIN work_entry_employees wee ON u.id = wee.employee_id
+    LEFT JOIN work_entries we ON wee.work_entry_id = we.id ${dateFilter}
+    WHERE u.role = 'employee' AND u.is_active = 1
+    GROUP BY u.id, u.name
+    ORDER BY hours_logged DESC
+  `);
+
+  res.json({ period, periodLabel, employees: rows });
+});
+
 module.exports = router;

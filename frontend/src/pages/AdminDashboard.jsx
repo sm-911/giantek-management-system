@@ -9,11 +9,159 @@ import {
 } from 'recharts';
 import {
   MdWork, MdPeople, MdBusiness, MdCurrencyRupee,
-  MdCheckCircle, MdPending, MdToday, MdAccessTime
+  MdCheckCircle, MdPending, MdToday, MdAccessTime, MdClose
 } from 'react-icons/md';
 
 const COLORS = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444'];
 
+// ── Hours Logged Modal ────────────────────────────────────────────────────────
+const HoursModal = ({ onClose }) => {
+  const [period, setPeriod] = useState('weekly');
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const fetchHours = async (p) => {
+    setLoading(true);
+    try {
+      const res = await api.get(`/reports/hours-by-employee?period=${p}`);
+      setData(res.data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchHours(period); }, [period]);
+
+  const maxHours = data?.employees?.length
+    ? Math.max(...data.employees.map(e => Number(e.hours_logged)))
+    : 1;
+
+  const PERIOD_TABS = [
+    { id: 'daily',   label: 'Today' },
+    { id: 'weekly',  label: 'This Week' },
+    { id: 'monthly', label: 'This Month' },
+  ];
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div onClick={onClose} style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+        backdropFilter: 'blur(2px)', zIndex: 300
+      }} />
+
+      {/* Modal */}
+      <div style={{
+        position: 'fixed', top: '50%', left: '50%', zIndex: 301,
+        transform: 'translate(-50%, -50%)',
+        background: 'var(--bg-card)', border: '1px solid var(--border)',
+        borderRadius: '16px', width: 'min(560px, 95vw)', maxHeight: '80vh',
+        display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-lg)',
+        animation: 'fadeInScale .2s ease'
+      }}>
+        {/* Header */}
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '17px' }}>⏱ Hours Logged Per Employee</h3>
+            {data && <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>{data.periodLabel}</p>}
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex' }}>
+            <MdClose size={22} />
+          </button>
+        </div>
+
+        {/* Period tabs */}
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--bg-main)' }}>
+          {PERIOD_TABS.map(t => (
+            <button key={t.id} onClick={() => setPeriod(t.id)} style={{
+              flex: 1, padding: '10px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
+              background: 'none', transition: 'all .2s',
+              color: period === t.id ? 'var(--accent)' : 'var(--text-secondary)',
+              borderBottom: period === t.id ? '2px solid var(--accent)' : '2px solid transparent',
+              marginBottom: '-1px'
+            }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1 }}>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>
+              <div className="spinner" style={{ margin: '0 auto 10px' }} /> Loading...
+            </div>
+          ) : !data?.employees?.length ? (
+            <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>No entries found for this period.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {data.employees.map((emp, idx) => (
+                <div key={emp.id}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{
+                        width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                        background: `${COLORS[idx % COLORS.length]}33`,
+                        color: COLORS[idx % COLORS.length],
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontWeight: 700, fontSize: '13px'
+                      }}>
+                        {emp.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '14px' }}>{emp.name}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{emp.entry_count} work {emp.entry_count === 1 ? 'entry' : 'entries'}</div>
+                      </div>
+                    </div>
+                    <div style={{ fontWeight: 700, color: COLORS[idx % COLORS.length], fontSize: '16px' }}>
+                      {Number(emp.hours_logged).toFixed(1)} hrs
+                    </div>
+                  </div>
+                  {/* Progress bar */}
+                  <div style={{ height: 6, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%', borderRadius: 4, transition: 'width .5s ease',
+                      background: COLORS[idx % COLORS.length],
+                      width: `${maxHours > 0 ? (Number(emp.hours_logged) / maxHours) * 100 : 0}%`
+                    }} />
+                  </div>
+                </div>
+              ))}
+
+              {/* Total bar */}
+              <div style={{ marginTop: '8px', paddingTop: '12px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Total Hours</span>
+                <strong style={{ color: 'var(--text-primary)' }}>
+                  {data.employees.reduce((s, e) => s + Number(e.hours_logged), 0).toFixed(1)} hrs
+                </strong>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+      <style>{`@keyframes fadeInScale { from { opacity:0; transform:translate(-50%,-50%) scale(.95); } to { opacity:1; transform:translate(-50%,-50%) scale(1); } }`}</style>
+    </>
+  );
+};
+
+// ── Custom pie label that uses shorter names ──────────────────────────────────
+const renderPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }) => {
+  const RADIAN = Math.PI / 180;
+  const radius = outerRadius + 28;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+  if (percent < 0.05) return null; // hide tiny slices
+  return (
+    <text x={x} y={y} fill="var(--text-secondary)" textAnchor={x > cx ? 'start' : 'end'}
+      dominantBaseline="central" fontSize={11}>
+      {`${name} ${(percent * 100).toFixed(0)}%`}
+    </text>
+  );
+};
+
+// ── Main dashboard component ──────────────────────────────────────────────────
 const AdminDashboard = () => {
   const [summary, setSummary] = useState(null);
   const [empStats, setEmpStats] = useState([]);
@@ -22,6 +170,7 @@ const AdminDashboard = () => {
   const [revenueTrend, setRevenueTrend] = useState([]);
   const [recentWork, setRecentWork] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showHoursModal, setShowHoursModal] = useState(false);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -55,13 +204,6 @@ const AdminDashboard = () => {
     </Layout>
   );
 
-  const priorityData = [
-    { name: 'Low', value: recentWork.filter(w => w.priority === 'Low').length },
-    { name: 'Medium', value: recentWork.filter(w => w.priority === 'Medium').length },
-    { name: 'High', value: recentWork.filter(w => w.priority === 'High').length },
-    { name: 'Urgent', value: recentWork.filter(w => w.priority === 'Urgent').length },
-  ].filter(d => d.value > 0);
-
   return (
     <Layout>
       <div className="page">
@@ -87,8 +229,12 @@ const AdminDashboard = () => {
             icon={<MdBusiness size={24} />} color="#8b5cf6" />
           <StatCard label="Total Revenue" value={formatCurrency(summary?.totalRevenue ?? 0)}
             icon={<MdCurrencyRupee size={24} />} color="#10b981" subtext="All time" />
-          <StatCard label="Total Hours Logged" value={`${summary?.totalHours ?? 0} hrs`}
-            icon={<MdAccessTime size={24} />} color="#f59e0b" />
+          {/* ── Clickable Hours card ── */}
+          <div onClick={() => setShowHoursModal(true)} style={{ cursor: 'pointer' }} title="Click to view hours per employee">
+            <StatCard label="Total Hours Logged" value={`${summary?.totalHours ?? 0} hrs`}
+              icon={<MdAccessTime size={24} />} color="#f59e0b"
+              subtext={<span style={{ color: '#f59e0b', fontSize: '11px' }}>↗ Click to break down by period</span>} />
+          </div>
           <StatCard label="Today's Work" value={summary?.todayWork ?? 0}
             icon={<MdToday size={24} />} color="#06b6d4" subtext={new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })} />
         </div>
@@ -115,17 +261,30 @@ const AdminDashboard = () => {
             </ResponsiveContainer>
           </div>
 
-          {/* Work Type Breakdown */}
+          {/* Work Type Breakdown — fixed labels using Legend instead of inline */}
           <div className="chart-card">
             <h3 className="chart-card__title">Work Type Breakdown</h3>
-            <ResponsiveContainer width="100%" height={250}>
+            <ResponsiveContainer width="100%" height={270}>
               <PieChart>
-                <Pie data={workTypeStats} dataKey="total" nameKey="work_type"
-                  cx="50%" cy="50%" outerRadius={80} label={({ work_type, percent }) => `${work_type} ${(percent * 100).toFixed(0)}%`}
-                  labelLine={{ stroke: 'var(--text-secondary)' }}>
+                <Pie
+                  data={workTypeStats}
+                  dataKey="total"
+                  nameKey="work_type"
+                  cx="50%"
+                  cy="45%"
+                  outerRadius={90}
+                  labelLine={false}
+                  label={renderPieLabel}
+                >
                   {workTypeStats.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
-                <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }} />
+                <Tooltip
+                  contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }}
+                  formatter={(v, name) => [v, name]}
+                />
+                <Legend
+                  formatter={(value) => <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{value}</span>}
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -248,6 +407,9 @@ const AdminDashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Hours Modal */}
+      {showHoursModal && <HoursModal onClose={() => setShowHoursModal(false)} />}
     </Layout>
   );
 };
