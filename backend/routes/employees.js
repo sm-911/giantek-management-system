@@ -295,6 +295,7 @@ router.get('/:id/stats', async (req, res) => {
     const emp = empRows[0];
     if (!emp) return res.status(404).json({ error: 'Employee not found.' });
 
+    // Work entries filter (uses work_date DATE column)
     let dateFilter, periodLabel;
     if (period === 'daily') {
       dateFilter = 'AND we.work_date = CURDATE()';
@@ -310,6 +311,18 @@ router.get('/:id/stats', async (req, res) => {
       periodLabel = 'This Week';
     }
 
+    // Revenue filter — uses created_at (DATETIME) on the revenue table
+    let revDateFilter;
+    if (period === 'daily') {
+      revDateFilter = 'AND DATE(r.created_at) = CURDATE()';
+    } else if (period === 'monthly') {
+      revDateFilter = "AND r.created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')";
+    } else if (period === 'yearly') {
+      revDateFilter = "AND r.created_at >= DATE_FORMAT(CURDATE(), '%Y-01-01')";
+    } else {
+      revDateFilter = 'AND r.created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)';
+    }
+
     const [statsRows] = await db.execute(`
       SELECT
         COUNT(DISTINCT wee.work_entry_id) AS total_tasks,
@@ -322,10 +335,10 @@ router.get('/:id/stats', async (req, res) => {
     `, [empId]);
 
     const [revenueRows] = await db.execute(`
-      SELECT COALESCE(SUM(value), 0) AS total
-      FROM revenue
-      WHERE employee_id = ? ${dateFilter.replace(/we\.work_date/g, 'created_at').replace('CURDATE()', 'CURDATE()').replace('wee.work_entry_id', 'id')}
-    `.replace(/AND we\.work_date/g, 'AND created_at').replace(/wee\.work_entry_id/g, 'id'), [empId]);
+      SELECT COALESCE(SUM(r.value), 0) AS total
+      FROM revenue r
+      WHERE r.employee_id = ? ${revDateFilter}
+    `, [empId]);
 
     const [workEntries] = await db.execute(`
       SELECT we.id, c.name AS client_name, we.work_type, we.misc_description,
@@ -341,16 +354,9 @@ router.get('/:id/stats', async (req, res) => {
       SELECT r.id, c.name AS client_name, r.work_type, r.value, r.notes, r.created_at
       FROM revenue r
       JOIN clients c ON c.id = r.client_id
-      WHERE r.employee_id = ? AND r.created_at >= (
-        SELECT CASE
-          WHEN ? = 'daily'   THEN CURDATE()
-          WHEN ? = 'monthly' THEN DATE_FORMAT(CURDATE(), '%Y-%m-01')
-          WHEN ? = 'yearly'  THEN DATE_FORMAT(CURDATE(), '%Y-01-01')
-          ELSE DATE_SUB(CURDATE(), INTERVAL 6 DAY)
-        END
-      )
+      WHERE r.employee_id = ? ${revDateFilter}
       ORDER BY r.created_at DESC
-    `, [empId, period, period, period]);
+    `, [empId]);
 
     res.json({
       employee: emp,
