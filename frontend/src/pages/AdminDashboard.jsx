@@ -146,21 +146,6 @@ const HoursModal = ({ onClose }) => {
   );
 };
 
-// ── Custom pie label that uses shorter names ──────────────────────────────────
-const renderPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }) => {
-  const RADIAN = Math.PI / 180;
-  const radius = outerRadius + 28;
-  const x = cx + radius * Math.cos(-midAngle * RADIAN);
-  const y = cy + radius * Math.sin(-midAngle * RADIAN);
-  if (percent < 0.05) return null; // hide tiny slices
-  return (
-    <text x={x} y={y} fill="var(--text-secondary)" textAnchor={x > cx ? 'start' : 'end'}
-      dominantBaseline="central" fontSize={11}>
-      {`${name} ${(percent * 100).toFixed(0)}%`}
-    </text>
-  );
-};
-
 // ── Main dashboard component ──────────────────────────────────────────────────
 const AdminDashboard = () => {
   const [summary, setSummary] = useState(null);
@@ -274,7 +259,6 @@ const AdminDashboard = () => {
                   cy="45%"
                   outerRadius={90}
                   labelLine={false}
-                  label={renderPieLabel}
                 >
                   {workTypeStats.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
