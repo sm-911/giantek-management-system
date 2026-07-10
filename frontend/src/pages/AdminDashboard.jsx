@@ -183,6 +183,15 @@ const AdminDashboard = () => {
     fetchAll();
   }, []);
 
+  // Calculate dynamic ticks for charts
+  const maxTasks = empStats.length > 0 ? Math.max(...empStats.map(e => Math.max(e.completed_tasks, e.pending_tasks))) : 0;
+  const taskMaxTick = Math.max(10, Math.ceil(maxTasks / 5) * 5);
+  const taskTicks = Array.from({ length: (taskMaxTick / 5) + 1 }, (_, i) => i * 5);
+
+  const maxRevenue = revenueTrend.length > 0 ? Math.max(...revenueTrend.map(r => r.total_revenue)) : 0;
+  const revMaxTick = Math.max(1500, Math.ceil(maxRevenue / 500) * 500);
+  const revenueTicks = Array.from({ length: (revMaxTick / 500) + 1 }, (_, i) => i * 500);
+
   if (loading) return (
     <Layout>
       <div className="page-loading"><div className="spinner" /><p>Loading dashboard...</p></div>
@@ -291,7 +300,7 @@ const AdminDashboard = () => {
               <BarChart data={empStats}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="name" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
-                <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} domain={[0, 'dataMax + 2']} />
+                <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} ticks={taskTicks} domain={[0, 'dataMax']} />
                 <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }} />
                 <Legend />
                 <Bar dataKey="completed_tasks" name="Completed" fill="#10b981" radius={[4, 4, 0, 0]} />
@@ -307,7 +316,7 @@ const AdminDashboard = () => {
               <BarChart data={revenueTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="month" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
-                <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} tickFormatter={v => v >= 1000 ? `₹${(v/1000).toFixed(1).replace('.0', '')}K` : `₹${v}`} />
+                <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} ticks={revenueTicks} tickFormatter={v => v >= 1000 ? `₹${(v/1000).toFixed(1).replace('.0', '')}K` : `₹${v}`} domain={[0, 'dataMax']} />
                 <Tooltip cursor={{ fill: 'transparent' }}
                   contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }}
                   formatter={v => [formatCurrency(v), 'Revenue']}

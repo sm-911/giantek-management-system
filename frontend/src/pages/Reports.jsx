@@ -41,6 +41,10 @@ const Reports = () => {
     fetchAll();
   }, []);
 
+  const maxRevenue = revenueTrend.length > 0 ? Math.max(...revenueTrend.map(r => r.total_revenue)) : 0;
+  const revMaxTick = Math.max(1500, Math.ceil(maxRevenue / 500) * 500);
+  const revenueTicks = Array.from({ length: (revMaxTick / 500) + 1 }, (_, i) => i * 500);
+
   if (loading) return (
     <Layout>
       <div className="page-loading"><div className="spinner" /><p>Loading reports...</p></div>
@@ -93,7 +97,7 @@ const Reports = () => {
               <BarChart data={revenueTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="month" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
-                <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} tickFormatter={v => v >= 1000 ? `₹${(v/1000).toFixed(1).replace('.0', '')}K` : `₹${v}`} />
+                <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} ticks={revenueTicks} tickFormatter={v => v >= 1000 ? `₹${(v/1000).toFixed(1).replace('.0', '')}K` : `₹${v}`} domain={[0, 'dataMax']} />
                 <Tooltip cursor={{ fill: 'transparent' }} formatter={v => [formatCurrency(v), 'Revenue']}
                   contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }}
                   itemStyle={{ color: 'var(--text-primary)' }}
