@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 const db = require('../db/database');
 const { authenticate, logAudit } = require('../middleware/auth');
 const { sendPasswordResetEmail } = require('../utils/mailer');
@@ -127,7 +127,7 @@ router.post('/forgot-password', async (req, res) => {
   await db.execute('UPDATE password_resets SET used = 1 WHERE user_id = ? AND used = 0', [user.id]);
 
   // Generate a short readable token (8 chars uppercase)
-  const token = uuidv4().replace(/-/g, '').substring(0, 8).toUpperCase();
+  const token = crypto.randomUUID().replace(/-/g, '').substring(0, 8).toUpperCase();
 
   // Token expires in 1 hour
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();

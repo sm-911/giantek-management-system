@@ -1,24 +1,30 @@
-import { format, formatDistanceToNow, parseISO } from 'date-fns';
-
 // ─── Date Formatting ──────────────────────────────────────────────────────────
 export const formatDate = (dateStr) => {
   if (!dateStr) return '—';
   try {
-    return format(parseISO(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00'), 'dd MMM yyyy');
+    const d = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00');
+    return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(d);
   } catch { return dateStr; }
 };
 
 export const formatDateTime = (dateStr) => {
   if (!dateStr) return '—';
   try {
-    return format(parseISO(dateStr), 'dd MMM yyyy, hh:mm a');
+    const d = new Date(dateStr);
+    return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }).format(d);
   } catch { return dateStr; }
 };
 
 export const timeAgo = (dateStr) => {
   if (!dateStr) return '—';
   try {
-    return formatDistanceToNow(parseISO(dateStr), { addSuffix: true });
+    const d = new Date(dateStr);
+    const diff = (d - new Date()) / 1000;
+    const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+    if (Math.abs(diff) < 60) return rtf.format(Math.round(diff), 'second');
+    if (Math.abs(diff) < 3600) return rtf.format(Math.round(diff / 60), 'minute');
+    if (Math.abs(diff) < 86400) return rtf.format(Math.round(diff / 3600), 'hour');
+    return rtf.format(Math.round(diff / 86400), 'day');
   } catch { return dateStr; }
 };
 
