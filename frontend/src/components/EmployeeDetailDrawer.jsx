@@ -8,6 +8,7 @@ import {
 } from 'react-icons/md';
 
 const PERIOD_TABS = [
+  { id: 'all',     label: 'All Time' },
   { id: 'weekly',  label: 'This Week' },
   { id: 'monthly', label: 'This Month' },
   { id: 'yearly',  label: 'This Year' },
@@ -16,7 +17,7 @@ const PERIOD_TABS = [
 const STAT_COLOR = ['#6366f1', '#10b981', '#f59e0b', '#0ea5e9'];
 
 const EmployeeDetailDrawer = ({ employee, onClose }) => {
-  const [period, setPeriod] = useState('weekly');
+  const [period, setPeriod] = useState('all');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState('work'); // 'work' | 'revenue'

@@ -64,9 +64,19 @@ const Reports = () => {
             <LineChart data={dailyWork}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="date" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }}
-                tickFormatter={d => d.slice(5)} />
+                tickFormatter={d => {
+                  const dt = new Date(d);
+                  return isNaN(dt.getTime()) ? String(d).slice(0, 5) : dt.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit' });
+                }} />
               <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
-              <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }} />
+              <Tooltip 
+                contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }}
+                labelStyle={{ color: 'var(--text-primary)' }}
+                labelFormatter={d => {
+                  const dt = new Date(d);
+                  return isNaN(dt.getTime()) ? d : dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+                }}
+              />
               <Legend />
               <Line type="monotone" dataKey="total" name="Total" stroke="#6366f1" strokeWidth={2} dot={false} />
               <Line type="monotone" dataKey="completed" name="Completed" stroke="#10b981" strokeWidth={2} dot={false} />
