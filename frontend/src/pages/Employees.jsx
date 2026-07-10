@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import EmployeeModal from '../components/EmployeeModal';
+import EmployeeDetailDrawer from '../components/EmployeeDetailDrawer';
 import Modal from '../components/Modal';
 import api from '../api/axios';
 import { toast } from 'react-toastify';
@@ -8,7 +9,7 @@ import { formatDate, formatCurrency, getErrorMessage } from '../utils/helpers';
 import {
   MdAdd, MdEdit, MdSearch, MdKey, MdPersonOff, MdPersonAdd,
   MdDelete, MdHistory, MdExpandMore, MdExpandLess, MdRestoreFromTrash,
-  MdWork, MdAttachMoney, MdAccessTime, MdCheckCircle
+  MdWork, MdAttachMoney, MdAccessTime, MdCheckCircle, MdOpenInNew
 } from 'react-icons/md';
 
 // ─── History Modal ──────────────────────────────────────────────────────────
@@ -157,6 +158,7 @@ const Employees = () => {
   const [showModal, setShowModal] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [historyTarget, setHistoryTarget] = useState(null);
+  const [selectedEmployee, setSelectedEmployee] = useState(null); // for detail drawer
   const [resetTargetId, setResetTargetId] = useState(null);
   const [newPassword, setNewPassword] = useState('');
   const [resetRequests, setResetRequests] = useState([]);
@@ -313,7 +315,12 @@ const Employees = () => {
                     {search ? 'No employees match your search.' : 'No employees yet. Add your first employee!'}
                   </td></tr>
                 ) : filtered.map((emp, idx) => (
-                  <tr key={emp.id} className={!emp.is_active ? 'table__row--inactive' : ''}>
+                  <tr key={emp.id}
+                    className={!emp.is_active ? 'table__row--inactive' : ''}
+                    onClick={() => setSelectedEmployee(emp)}
+                    style={{ cursor: 'pointer' }}
+                    title="Click to view employee details"
+                  >
                     <td className="text-muted">{idx + 1}</td>
                     <td className="table__primary">{emp.name}</td>
                     <td>{emp.email}</td>
@@ -324,8 +331,14 @@ const Employees = () => {
                       </span>
                     </td>
                     <td>{formatDate(emp.created_at)}</td>
-                    <td>
+                    <td onClick={e => e.stopPropagation()}>
                       <div className="action-btns">
+                        {/* Open detail drawer */}
+                        <button className="icon-btn" title="View details"
+                          onClick={() => setSelectedEmployee(emp)}
+                          style={{ color: 'var(--accent)' }}>
+                          <MdOpenInNew size={16} />
+                        </button>
                         {/* Edit */}
                         <button className="icon-btn" title="Edit employee"
                           onClick={() => { setEditTarget(emp); setShowModal(true); }}>
@@ -450,6 +463,14 @@ const Employees = () => {
           </div>
         )}
       </div>
+
+      {/* ── Employee Detail Drawer ──────────────────────────────────────── */}
+      {selectedEmployee && (
+        <EmployeeDetailDrawer
+          employee={selectedEmployee}
+          onClose={() => setSelectedEmployee(null)}
+        />
+      )}
 
       {/* ── Add/Edit Employee Modal ─────────────────────────────────────── */}
       {showModal && (

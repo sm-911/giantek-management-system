@@ -284,4 +284,89 @@ router.post('/:id/reset-password', async (req, res) => {
   }
 });
 
+// ─── GET /api/employees/:id/stats ────────────────────────────────────────────
+// Period-filtered stats for a specific employee: weekly | monthly | yearly
+router.get('/:id/stats', async (req, res) => {
+  try {
+    const empId = parseInt(req.params.id);
+    const { period = 'weekly' } = req.query;
+
+    const [empRows] = await db.execute('SELECT id, name, email FROM users WHERE id = ? AND role = \'employee\'', [empId]);
+    const emp = empRows[0];
+    if (!emp) return res.status(404).json({ error: 'Employee not found.' });
+
+    let dateFilter, periodLabel;
+    if (period === 'daily') {
+      dateFilter = 'AND we.work_date = CURDATE()';
+      periodLabel = 'Today';
+    } else if (period === 'monthly') {
+      dateFilter = "AND we.work_date >= DATE_FORMAT(CURDATE(), '%Y-%m-01')";
+      periodLabel = 'This Month';
+    } else if (period === 'yearly') {
+      dateFilter = "AND we.work_date >= DATE_FORMAT(CURDATE(), '%Y-01-01')";
+      periodLabel = 'This Year';
+    } else {
+      dateFilter = 'AND we.work_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)';
+      periodLabel = 'This Week';
+    }
+
+    const [statsRows] = await db.execute(`
+      SELECT
+        COUNT(DISTINCT wee.work_entry_id) AS total_tasks,
+        SUM(CASE WHEN we.status = 'completed' THEN 1 ELSE 0 END) AS completed_tasks,
+        SUM(CASE WHEN we.status = 'in_progress' THEN 1 ELSE 0 END) AS in_progress_tasks,
+        COALESCE(SUM(we.time_taken), 0) AS total_hours
+      FROM work_entries we
+      JOIN work_entry_employees wee ON wee.work_entry_id = we.id
+      WHERE wee.employee_id = ? ${dateFilter}
+    `, [empId]);
+
+    const [revenueRows] = await db.execute(`
+      SELECT COALESCE(SUM(value), 0) AS total
+      FROM revenue
+      WHERE employee_id = ? ${dateFilter.replace(/we\.work_date/g, 'created_at').replace('CURDATE()', 'CURDATE()').replace('wee.work_entry_id', 'id')}
+    `.replace(/AND we\.work_date/g, 'AND created_at').replace(/wee\.work_entry_id/g, 'id'), [empId]);
+
+    const [workEntries] = await db.execute(`
+      SELECT we.id, c.name AS client_name, we.work_type, we.misc_description,
+             we.status, we.time_taken, we.priority, we.work_date
+      FROM work_entries we
+      JOIN work_entry_employees wee ON wee.work_entry_id = we.id
+      JOIN clients c ON c.id = we.client_id
+      WHERE wee.employee_id = ? ${dateFilter}
+      ORDER BY we.work_date DESC
+    `, [empId]);
+
+    const [revenue] = await db.execute(`
+      SELECT r.id, c.name AS client_name, r.work_type, r.value, r.notes, r.created_at
+      FROM revenue r
+      JOIN clients c ON c.id = r.client_id
+      WHERE r.employee_id = ? AND r.created_at >= (
+        SELECT CASE
+          WHEN ? = 'daily'   THEN CURDATE()
+          WHEN ? = 'monthly' THEN DATE_FORMAT(CURDATE(), '%Y-%m-01')
+          WHEN ? = 'yearly'  THEN DATE_FORMAT(CURDATE(), '%Y-01-01')
+          ELSE DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+        END
+      )
+      ORDER BY r.created_at DESC
+    `, [empId, period, period, period]);
+
+    res.json({
+      employee: emp,
+      period,
+      periodLabel,
+      stats: {
+        ...statsRows[0],
+        total_revenue: revenueRows[0]?.total ?? 0
+      },
+      work_entries: workEntries,
+      revenue
+    });
+  } catch (err) {
+    console.error('GET /employees/:id/stats error:', err);
+    res.status(500).json({ error: 'Failed to fetch employee stats. ' + err.message });
+  }
+});
+
 module.exports = router;
