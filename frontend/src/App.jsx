@@ -10,7 +10,6 @@ import Clients        from './pages/Clients';
 import WorkEntries    from './pages/WorkEntries';
 import Revenue        from './pages/Revenue';
 import Reports        from './pages/Reports';
-import AuditLog       from './pages/AuditLog';
 import ProtectedRoute from './components/ProtectedRoute';
 
 const App = () => {
@@ -47,9 +46,6 @@ const App = () => {
       } />
       <Route path="/admin/reports" element={
         <ProtectedRoute requiredRole="admin"><Reports /></ProtectedRoute>
-      } />
-      <Route path="/admin/audit" element={
-        <ProtectedRoute requiredRole="admin"><AuditLog /></ProtectedRoute>
       } />
 
       {/* ── Employee routes ───────────────────────────────────────────── */}

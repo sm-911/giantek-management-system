@@ -13,7 +13,6 @@ const adminLinks = [
   { to: '/admin/work',      label: 'Work Entries', icon: MdWork },
   { to: '/admin/revenue',   label: 'Revenue',      icon: MdCurrencyRupee },
   { to: '/admin/reports',   label: 'Reports',      icon: MdBarChart },
-  { to: '/admin/audit',     label: 'Audit Log',    icon: MdHistory },
 ];
 
 // Navigation links for Employee role

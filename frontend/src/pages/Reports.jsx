@@ -97,11 +97,11 @@ const Reports = () => {
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
                 <Pie data={workTypeStats} dataKey="total" nameKey="work_type"
-                  cx="50%" cy="50%" outerRadius={90}
-                  label={({ work_type, percent }) => `${work_type} ${(percent * 100).toFixed(0)}%`}>
+                  cx="50%" cy="50%" outerRadius={90}>
                   {workTypeStats.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }} />
+                <Legend />
               </PieChart>
             </ResponsiveContainer>
           </div>
