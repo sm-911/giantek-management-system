@@ -271,6 +271,7 @@ const AdminDashboard = () => {
                 </Pie>
                 <Tooltip
                   contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }}
+                  itemStyle={{ color: 'var(--text-primary)' }}
                   formatter={(v, name) => [v, name]}
                 />
                 <Legend
