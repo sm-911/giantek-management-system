@@ -93,14 +93,12 @@ const Reports = () => {
               <BarChart data={revenueTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="month" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
-                <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} tickFormatter={v => `₹${(v/1000).toFixed(0)}K`} />
+                <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} tickFormatter={v => v >= 1000 ? `₹${(v/1000).toFixed(1).replace('.0', '')}K` : `₹${v}`} />
                 <Tooltip cursor={{ fill: 'transparent' }} formatter={v => [formatCurrency(v), 'Revenue']}
                   contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }}
                   itemStyle={{ color: 'var(--text-primary)' }}
                   labelStyle={{ color: 'var(--text-primary)' }} />
-                <Bar dataKey="total_revenue" name="Revenue" fill="#6366f1" radius={[4, 4, 0, 0]}>
-                  <LabelList dataKey="total_revenue" position="insideTop" fill="#fff" formatter={v => v > 0 ? (v/1000).toFixed(1) + 'K' : ''} />
-                </Bar>
+                <Bar dataKey="total_revenue" name="Revenue" fill="#6366f1" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -136,12 +134,8 @@ const Reports = () => {
                   itemStyle={{ color: 'var(--text-primary)' }}
                   labelStyle={{ color: 'var(--text-primary)' }} />
                 <Legend />
-                <Bar dataKey="completed" name="Completed" fill="#10b981" stackId="a" radius={[0, 4, 4, 0]}>
-                  <LabelList dataKey="completed" position="insideRight" fill="#fff" formatter={v => v > 0 ? v : ''} />
-                </Bar>
-                <Bar dataKey="total" name="Total" fill="#6366f180" stackId="b" radius={[0, 4, 4, 0]}>
-                  <LabelList dataKey="total" position="insideRight" fill="#fff" formatter={v => v > 0 ? v : ''} />
-                </Bar>
+                <Bar dataKey="completed" name="Completed" fill="#10b981" stackId="a" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="total" name="Total" fill="#6366f180" stackId="b" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

@@ -291,15 +291,11 @@ const AdminDashboard = () => {
               <BarChart data={empStats}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="name" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
-                <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
+                <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} domain={[0, 'dataMax + 2']} />
                 <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }} />
                 <Legend />
-                <Bar dataKey="completed_tasks" name="Completed" fill="#10b981" radius={[4, 4, 0, 0]}>
-                  <LabelList dataKey="completed_tasks" position="top" fill="#fff" formatter={v => v > 0 ? v : ''} />
-                </Bar>
-                <Bar dataKey="pending_tasks" name="Pending" fill="#f59e0b" radius={[4, 4, 0, 0]}>
-                  <LabelList dataKey="pending_tasks" position="top" fill="#fff" formatter={v => v > 0 ? v : ''} />
-                </Bar>
+                <Bar dataKey="completed_tasks" name="Completed" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="pending_tasks" name="Pending" fill="#f59e0b" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -311,14 +307,12 @@ const AdminDashboard = () => {
               <BarChart data={revenueTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="month" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
-                <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} tickFormatter={v => `₹${(v/1000).toFixed(0)}K`} />
+                <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} tickFormatter={v => v >= 1000 ? `₹${(v/1000).toFixed(1).replace('.0', '')}K` : `₹${v}`} />
                 <Tooltip cursor={{ fill: 'transparent' }}
                   contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }}
                   formatter={v => [formatCurrency(v), 'Revenue']}
                 />
-                <Bar dataKey="total_revenue" name="Revenue" fill="#6366f1" radius={[4, 4, 0, 0]}>
-                  <LabelList dataKey="total_revenue" position="top" fill="#fff" formatter={v => v > 0 ? (v/1000).toFixed(1) + 'K' : ''} />
-                </Bar>
+                <Bar dataKey="total_revenue" name="Revenue" fill="#6366f1" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
