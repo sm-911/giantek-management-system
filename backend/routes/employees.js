@@ -45,14 +45,22 @@ router.get('/:id', async (req, res) => {
 });
 
 // ─── GET /api/employees/:id/history ──────────────────────────────────────────
-// Full work + revenue history for a specific employee — useful for reviewing
-// a removed employee's contributions.
+// Full work + revenue history for a specific employee.
+// Optional ?period=weekly|monthly|yearly to filter by date range.
 router.get('/:id/history', async (req, res) => {
   try {
     const empId = parseInt(req.params.id);
+    const { period } = req.query;
+
     const [empRows] = await db.execute('SELECT id, name, email, role, is_deleted FROM users WHERE id = ?', [empId]);
     const emp = empRows[0];
     if (!emp) return res.status(404).json({ error: 'Employee not found.' });
+
+    // Build date filters only when a period is requested
+    let workFilter = '', revFilter = '', periodLabel = 'All Time';
+    if (period === 'weekly')  { workFilter = 'AND we.work_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)'; revFilter = 'AND r.created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)'; periodLabel = 'This Week'; }
+    if (period === 'monthly') { workFilter = "AND we.work_date >= DATE_FORMAT(CURDATE(),'%Y-%m-01')";  revFilter = "AND r.created_at >= DATE_FORMAT(CURDATE(),'%Y-%m-01')";  periodLabel = 'This Month'; }
+    if (period === 'yearly')  { workFilter = "AND we.work_date >= DATE_FORMAT(CURDATE(),'%Y-01-01')";  revFilter = "AND r.created_at >= DATE_FORMAT(CURDATE(),'%Y-01-01')";  periodLabel = 'This Year'; }
 
     const [workEntries] = await db.execute(`
       SELECT we.id, c.name AS client_name, we.work_type, we.misc_description,
@@ -60,7 +68,7 @@ router.get('/:id/history', async (req, res) => {
       FROM work_entries we
       JOIN work_entry_employees wee ON wee.work_entry_id = we.id
       JOIN clients c ON c.id = we.client_id
-      WHERE wee.employee_id = ?
+      WHERE wee.employee_id = ? ${workFilter}
       ORDER BY we.work_date DESC
     `, [empId]);
 
@@ -68,29 +76,26 @@ router.get('/:id/history', async (req, res) => {
       SELECT r.id, c.name AS client_name, r.work_type, r.value, r.notes, r.created_at
       FROM revenue r
       JOIN clients c ON c.id = r.client_id
-      WHERE r.employee_id = ?
+      WHERE r.employee_id = ? ${revFilter}
       ORDER BY r.created_at DESC
     `, [empId]);
 
-    const [statsRows] = await db.execute(`
-      SELECT
-        COUNT(DISTINCT wee.work_entry_id) AS total_tasks,
-        SUM(CASE WHEN we.status = 'completed' THEN 1 ELSE 0 END) AS completed_tasks,
-        SUM(we.time_taken) AS total_hours
-      FROM work_entries we
-      JOIN work_entry_employees wee ON wee.work_entry_id = we.id
-      WHERE wee.employee_id = ?
-    `, [empId]);
-    const stats = statsRows[0];
-
-    const [totalRevenueRows] = await db.execute(
-      'SELECT COALESCE(SUM(value), 0) AS total FROM revenue WHERE employee_id = ?', [empId]
-    );
-    const totalRevenue = totalRevenueRows[0];
+    // Compute stats from filtered results — no extra DB round-trip needed
+    const completed = workEntries.filter(w => w.status === 'completed').length;
+    const totalHours = workEntries.reduce((s, w) => s + Number(w.time_taken), 0);
+    const totalRevenue = revenue.reduce((s, r) => s + Number(r.value), 0);
 
     res.json({
       employee: emp,
-      stats: { ...stats, total_revenue: totalRevenue.total },
+      period: period || 'all',
+      periodLabel,
+      stats: {
+        total_tasks: workEntries.length,
+        completed_tasks: completed,
+        in_progress_tasks: workEntries.length - completed,
+        total_hours: totalHours,
+        total_revenue: totalRevenue
+      },
       work_entries: workEntries,
       revenue
     });
@@ -281,97 +286,6 @@ router.post('/:id/reset-password', async (req, res) => {
   } catch (err) {
     console.error('POST /employees/:id/reset-password error:', err);
     res.status(500).json({ error: 'Failed to reset password. ' + err.message });
-  }
-});
-
-// ─── GET /api/employees/:id/stats ────────────────────────────────────────────
-// Period-filtered stats for a specific employee: weekly | monthly | yearly
-router.get('/:id/stats', async (req, res) => {
-  try {
-    const empId = parseInt(req.params.id);
-    const { period = 'weekly' } = req.query;
-
-    const [empRows] = await db.execute('SELECT id, name, email FROM users WHERE id = ? AND role = \'employee\'', [empId]);
-    const emp = empRows[0];
-    if (!emp) return res.status(404).json({ error: 'Employee not found.' });
-
-    // Work entries filter (uses work_date DATE column)
-    let dateFilter, periodLabel;
-    if (period === 'daily') {
-      dateFilter = 'AND we.work_date = CURDATE()';
-      periodLabel = 'Today';
-    } else if (period === 'monthly') {
-      dateFilter = "AND we.work_date >= DATE_FORMAT(CURDATE(), '%Y-%m-01')";
-      periodLabel = 'This Month';
-    } else if (period === 'yearly') {
-      dateFilter = "AND we.work_date >= DATE_FORMAT(CURDATE(), '%Y-01-01')";
-      periodLabel = 'This Year';
-    } else {
-      dateFilter = 'AND we.work_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)';
-      periodLabel = 'This Week';
-    }
-
-    // Revenue filter — uses created_at (DATETIME) on the revenue table
-    let revDateFilter;
-    if (period === 'daily') {
-      revDateFilter = 'AND DATE(r.created_at) = CURDATE()';
-    } else if (period === 'monthly') {
-      revDateFilter = "AND r.created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')";
-    } else if (period === 'yearly') {
-      revDateFilter = "AND r.created_at >= DATE_FORMAT(CURDATE(), '%Y-01-01')";
-    } else {
-      revDateFilter = 'AND r.created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)';
-    }
-
-    const [statsRows] = await db.execute(`
-      SELECT
-        COUNT(DISTINCT wee.work_entry_id) AS total_tasks,
-        SUM(CASE WHEN we.status = 'completed' THEN 1 ELSE 0 END) AS completed_tasks,
-        SUM(CASE WHEN we.status = 'in_progress' THEN 1 ELSE 0 END) AS in_progress_tasks,
-        COALESCE(SUM(we.time_taken), 0) AS total_hours
-      FROM work_entries we
-      JOIN work_entry_employees wee ON wee.work_entry_id = we.id
-      WHERE wee.employee_id = ? ${dateFilter}
-    `, [empId]);
-
-    const [revenueRows] = await db.execute(`
-      SELECT COALESCE(SUM(r.value), 0) AS total
-      FROM revenue r
-      WHERE r.employee_id = ? ${revDateFilter}
-    `, [empId]);
-
-    const [workEntries] = await db.execute(`
-      SELECT we.id, c.name AS client_name, we.work_type, we.misc_description,
-             we.status, we.time_taken, we.priority, we.work_date
-      FROM work_entries we
-      JOIN work_entry_employees wee ON wee.work_entry_id = we.id
-      JOIN clients c ON c.id = we.client_id
-      WHERE wee.employee_id = ? ${dateFilter}
-      ORDER BY we.work_date DESC
-    `, [empId]);
-
-    const [revenue] = await db.execute(`
-      SELECT r.id, c.name AS client_name, r.work_type, r.value, r.notes, r.created_at
-      FROM revenue r
-      JOIN clients c ON c.id = r.client_id
-      WHERE r.employee_id = ? ${revDateFilter}
-      ORDER BY r.created_at DESC
-    `, [empId]);
-
-    res.json({
-      employee: emp,
-      period,
-      periodLabel,
-      stats: {
-        ...statsRows[0],
-        total_revenue: revenueRows[0]?.total ?? 0
-      },
-      work_entries: workEntries,
-      revenue
-    });
-  } catch (err) {
-    console.error('GET /employees/:id/stats error:', err);
-    res.status(500).json({ error: 'Failed to fetch employee stats. ' + err.message });
   }
 });
 

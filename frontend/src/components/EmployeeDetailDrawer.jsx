@@ -24,7 +24,7 @@ const EmployeeDetailDrawer = ({ employee, onClose }) => {
   const fetchStats = async (p) => {
     setLoading(true);
     try {
-      const res = await api.get(`/employees/${employee.id}/stats?period=${p}`);
+      const res = await api.get(`/employees/${employee.id}/history?period=${p}`);
       setData(res.data);
     } catch (err) {
       toast.error(getErrorMessage(err));
