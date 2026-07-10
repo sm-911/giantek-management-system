@@ -3,7 +3,7 @@ import Layout from '../components/Layout';
 import api from '../api/axios';
 import { formatCurrency } from '../utils/helpers';
 import {
-  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
+  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, LabelList,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 
@@ -94,11 +94,13 @@ const Reports = () => {
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="month" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
                 <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} tickFormatter={v => `₹${(v/1000).toFixed(0)}K`} />
-                <Tooltip formatter={v => [formatCurrency(v), 'Revenue']}
+                <Tooltip cursor={{ fill: 'transparent' }} formatter={v => [formatCurrency(v), 'Revenue']}
                   contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }}
                   itemStyle={{ color: 'var(--text-primary)' }}
                   labelStyle={{ color: 'var(--text-primary)' }} />
-                <Bar dataKey="total_revenue" name="Revenue" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="total_revenue" name="Revenue" fill="#6366f1" radius={[4, 4, 0, 0]}>
+                  <LabelList dataKey="total_revenue" position="insideTop" fill="#fff" formatter={v => v > 0 ? (v/1000).toFixed(1) + 'K' : ''} />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -129,13 +131,17 @@ const Reports = () => {
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis type="number" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
                 <YAxis type="category" dataKey="priority" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} width={60} />
-                <Tooltip 
+                <Tooltip cursor={{ fill: 'transparent' }}
                   contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }}
                   itemStyle={{ color: 'var(--text-primary)' }}
                   labelStyle={{ color: 'var(--text-primary)' }} />
                 <Legend />
-                <Bar dataKey="completed" name="Completed" fill="#10b981" stackId="a" radius={[0, 4, 4, 0]} />
-                <Bar dataKey="total" name="Total" fill="#6366f180" stackId="b" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="completed" name="Completed" fill="#10b981" stackId="a" radius={[0, 4, 4, 0]}>
+                  <LabelList dataKey="completed" position="insideRight" fill="#fff" formatter={v => v > 0 ? v : ''} />
+                </Bar>
+                <Bar dataKey="total" name="Total" fill="#6366f180" stackId="b" radius={[0, 4, 4, 0]}>
+                  <LabelList dataKey="total" position="insideRight" fill="#fff" formatter={v => v > 0 ? v : ''} />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>

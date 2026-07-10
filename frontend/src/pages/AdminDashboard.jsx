@@ -4,7 +4,7 @@ import StatCard from '../components/StatCard';
 import api from '../api/axios';
 import { formatCurrency, formatDate, getPriorityColor, getStatusColor, getStatusLabel } from '../utils/helpers';
 import {
-  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
+  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, LabelList,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 import {
@@ -292,10 +292,14 @@ const AdminDashboard = () => {
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="name" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
                 <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
-                <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }} />
+                <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }} />
                 <Legend />
-                <Bar dataKey="completed_tasks" name="Completed" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="pending_tasks" name="Pending" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="completed_tasks" name="Completed" fill="#10b981" radius={[4, 4, 0, 0]}>
+                  <LabelList dataKey="completed_tasks" position="top" fill="#fff" formatter={v => v > 0 ? v : ''} />
+                </Bar>
+                <Bar dataKey="pending_tasks" name="Pending" fill="#f59e0b" radius={[4, 4, 0, 0]}>
+                  <LabelList dataKey="pending_tasks" position="top" fill="#fff" formatter={v => v > 0 ? v : ''} />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -308,11 +312,13 @@ const AdminDashboard = () => {
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="month" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
                 <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} tickFormatter={v => `₹${(v/1000).toFixed(0)}K`} />
-                <Tooltip
+                <Tooltip cursor={{ fill: 'transparent' }}
                   contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }}
                   formatter={v => [formatCurrency(v), 'Revenue']}
                 />
-                <Bar dataKey="total_revenue" name="Revenue" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="total_revenue" name="Revenue" fill="#6366f1" radius={[4, 4, 0, 0]}>
+                  <LabelList dataKey="total_revenue" position="top" fill="#fff" formatter={v => v > 0 ? (v/1000).toFixed(1) + 'K' : ''} />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
